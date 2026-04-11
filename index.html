@@ -12262,11 +12262,24 @@
                 let sanitizedText = sanitizeThoughtTags(msg.text);
                 let formattedHtml = sanitizedText;
                 
+                let justThoughts = false;
+                let tempText = formattedHtml.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
+                if (tempText === '') justThoughts = true;
+
                 if (friend.offlineSettings.showThoughts) {
                     formattedHtml = formattedHtml.replace(/<thought>([\s\S]*?)<\/thought>/g, '<span class="message-thought">$1</span>');
                 } else {
-                    // 如果隐藏心声，移除整个标签，并尝试吃掉周围多余的换行
-                    formattedHtml = formattedHtml.replace(/\n*<thought>[\s\S]*?<\/thought>\n*/g, '\n');
+                    if (justThoughts) {
+                        formattedHtml = '...';
+                        bubble.style.color = '#ccc';
+                        bubble.style.backgroundColor = 'transparent';
+                        bubble.style.border = 'none';
+                        bubble.style.boxShadow = 'none';
+                        bubble.style.padding = '12px 0';
+                    } else {
+                        // 如果隐藏心声，移除整个标签，并尝试吃掉周围多余的换行
+                        formattedHtml = formattedHtml.replace(/\n*<thought>[\s\S]*?<\/thought>\n*/g, '\n');
+                    }
                 }
                 
                 // 修复可能产生的多余换行 (连续3个以上的换行缩减为2个)
@@ -17854,12 +17867,9 @@ ${historyText}`;
                 const parsedSegments = parseOfflineMessage(msg.text);
                 container.appendChild(row);
                 
-                // 将心理描写数据绑定到头像上
                 let currentThoughts = [];
-                let hasDialogue = false;
                 for (let seg of parsedSegments) {
                     if (seg.type === 'thought') currentThoughts.push(seg.content);
-                    if (seg.type === 'dialogue') hasDialogue = true;
                 }
 
                 for (let index = 0; index < parsedSegments.length; index++) {
@@ -17903,14 +17913,9 @@ ${historyText}`;
                         avatar.className = 'offline-avatar';
                         avatar.src = msg.senderAvatar || friend.avatar;
                         
-                        // 绑定点击事件显示便利贴或全局心声
                         avatar.onclick = (e) => {
                             e.stopPropagation();
-                            if (currentThoughts.length > 0) {
-                                showStickyNote(e, currentThoughts.join('<br>'));
-                            } else {
-                                handleAvatarClick(msg.friendId);
-                            }
+                            handleAvatarClick(msg.friendId);
                         };
                         
                         const bubble = document.createElement('div');
@@ -17932,7 +17937,40 @@ ${historyText}`;
                         attachMessageEvents(actionDiv, msg, segmentInfo);
                         row.appendChild(actionDiv);
                     } else if (seg.type === 'thought') {
-                        continue; // 不再直接将 thought 渲染到聊天流中，统一通过点击头像显示便利贴
+                        if (friend && friend.offlineSettings && friend.offlineSettings.showThoughts) {
+                            const bubbleContainer = document.createElement('div');
+                            bubbleContainer.className = 'offline-bubble-container left';
+                            
+                            const contentGroup = document.createElement('div');
+                            contentGroup.className = 'offline-bubble-content-group';
+                            
+                            const nameLabel = document.createElement('div');
+                            nameLabel.className = 'offline-user-name';
+                            nameLabel.style.textAlign = 'left';
+                            nameLabel.textContent = msg.senderName || friend.name;
+                            
+                            const avatar = document.createElement('img');
+                            avatar.className = 'offline-avatar';
+                            avatar.src = msg.senderAvatar || friend.avatar;
+                            
+                            avatar.onclick = (e) => {
+                                e.stopPropagation();
+                                handleAvatarClick(msg.friendId);
+                            };
+                            
+                            const bubble = document.createElement('div');
+                            bubble.className = 'offline-bubble left';
+                            bubble.innerHTML = `<span class="message-thought">${seg.content.replace(/\n/g, '<br>')}</span>`;
+
+                            attachMessageEvents(bubble, msg, segmentInfo);
+                            
+                            contentGroup.appendChild(nameLabel);
+                            contentGroup.appendChild(bubble);
+                            
+                            bubbleContainer.appendChild(avatar);
+                            bubbleContainer.appendChild(contentGroup);
+                            row.appendChild(bubbleContainer);
+                        }
                     }
                     
                     if (shouldScroll) {
@@ -17940,7 +17978,6 @@ ${historyText}`;
                     }
                 }
 
-                // 如果整条消息只有 thought，没有 action 也没有 dialogue，给一个占位符避免无法点击头像
                 if (row.children.length === 0 && currentThoughts.length > 0) {
                     const bubbleContainer = document.createElement('div');
                     bubbleContainer.className = 'offline-bubble-container left';
@@ -17959,7 +17996,7 @@ ${historyText}`;
                     
                     avatar.onclick = (e) => {
                         e.stopPropagation();
-                        showStickyNote(e, currentThoughts.join('<br>'));
+                        handleAvatarClick(msg.friendId);
                     };
                     
                     const bubble = document.createElement('div');
@@ -17980,93 +18017,10 @@ ${historyText}`;
                     row.appendChild(bubbleContainer);
                 }
 
-                return; // Early return since we already appended the row
-            }
-
-            container.appendChild(row);
-            if (shouldScroll) {
-                container.scrollTop = container.scrollHeight;
+                return;
             }
         }
 
-        function showStickyNote(e, content) {
-            // Remove existing note if any
-            const existing = document.querySelector('.sticky-note-popup');
-            if (existing) existing.remove();
-
-            // 如果点击的是自己的头像或者没有心理描写内容，则不显示
-            if (!content) return;
-
-            const note = document.createElement('div');
-            note.className = 'sticky-note-popup';
-            note.innerHTML = content;
-            
-            document.body.appendChild(note);
-            
-            // Positioning logic
-            const rect = e.target.getBoundingClientRect();
-            
-            // 初始隐藏以计算尺寸
-            note.style.visibility = 'hidden'; 
-            
-            // Force reflow
-            const noteHeight = note.offsetHeight;
-            const noteWidth = note.offsetWidth;
-            note.style.visibility = 'visible';
-
-            // Default: show above-right of avatar
-            let top = rect.top - noteHeight - 10;
-            let left = rect.right + 5;
-            
-            // Adjust if out of bounds
-            if (left + noteWidth > window.innerWidth) {
-                left = rect.left - noteWidth - 5; 
-                // Modify style for left placement if needed
-                note.style.transformOrigin = 'bottom right';
-                // Move the little arrow triangle to right
-                const styleId = 'sticky-note-dynamic-style';
-                let style = document.getElementById(styleId);
-                if (!style) {
-                    style = document.createElement('style');
-                    style.id = styleId;
-                    document.head.appendChild(style);
-                }
-                style.innerHTML = `.sticky-note-popup::after { left: auto; right: 20px; } .sticky-note-popup::before { left: auto; right: 12px; }`;
-            } else {
-                // Reset arrow to left
-                const style = document.getElementById('sticky-note-dynamic-style');
-                if (style) style.innerHTML = `.sticky-note-popup::after { left: 20px; right: auto; } .sticky-note-popup::before { left: 12px; right: auto; }`;
-            }
-
-            if (top < 0) {
-                top = rect.bottom + 10; // Show below
-                // Adjust arrow to top if showing below? For now simple logic.
-            }
-            
-            note.style.top = top + 'px';
-            note.style.left = left + 'px';
-            
-            // Click to dismiss
-            note.onclick = () => note.remove();
-
-            // Auto remove after 5s
-            setTimeout(() => {
-                if (note.parentNode) {
-                    note.style.transition = 'opacity 0.3s';
-                    note.style.opacity = '0';
-                    setTimeout(() => note.remove(), 300);
-                }
-            }, 5000);
-            
-            // Global click to dismiss
-            const dismiss = (ev) => {
-                if (ev.target !== note && !note.contains(ev.target) && ev.target !== e.target) {
-                    note.remove();
-                    document.removeEventListener('click', dismiss);
-                }
-            };
-            setTimeout(() => document.addEventListener('click', dismiss), 0);
-        }
 
         function parseOfflineMessage(text) {
             const segments = [];
