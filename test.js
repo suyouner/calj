@@ -7760,16 +7760,6 @@ ${historyText}`;
                 }
             });
 
-            // 当页面重新可见时（比如从相册返回），也尝试恢复
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && !document.fullscreenElement) {
-                    // 先尝试直接恢复（有些浏览器允许）
-                    enterFullScreen();
-                    // 以前失败，绑定点击恢复
-                    document.addEventListener('click', restore, { once: true });
-                    document.addEventListener('touchstart', restore, { once: true });
-                }
-            });
 
             // 页面加载时的初始尝试
             enterFullScreen();
