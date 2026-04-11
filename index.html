@@ -3634,14 +3634,19 @@
             pointer-events: none;
         }
         #offline-manual-reply-btn.loading svg {
-            stroke: #999 !important;
+            display: none !important;
         }
-        #offline-manual-reply-btn.loading .plane-tail {
-            display: block !important;
-            animation: dash-flow 0.5s linear infinite;
+        #offline-manual-reply-btn.loading::after {
+            content: '';
+            width: 22px;
+            height: 22px;
+            border: 2px dashed #999;
+            border-radius: 50%;
+            animation: dashed-spin 1.2s linear infinite;
+            box-sizing: border-box;
         }
-        @keyframes dash-flow {
-            to { stroke-dashoffset: -6; }
+        @keyframes dashed-spin {
+            to { transform: rotate(360deg); }
         }
 
         #offline-chat-page {
@@ -5493,7 +5498,6 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: translate(-1px, 1px); transition: stroke 0.3s;">
                     <line x1="22" y1="2" x2="11" y2="13"></line>
                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    <path class="plane-tail" d="M 2 20 C 8 22, 12 16, 6 12 C 2 9, -1 15, 2 9" stroke-width="1.5" stroke-dasharray="3 3" style="display: none;"></path>
                 </svg>
             </div>
             <div class="offline-input-container">
