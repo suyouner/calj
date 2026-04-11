@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="icon192.png">
+    <link rel="icon" href="icon192.png" type="image/png">
     <style>
         :root {
             --bg-color: #f0f2f5;
@@ -3830,6 +3831,21 @@
             background-color: #b3e5fc;
         }
 
+        .offline-send-btn.sending {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .offline-send-btn .send-icon,
+        .offline-send-btn.sending .sending-icon {
+            display: inline-block;
+        }
+
+        .offline-send-btn .sending-icon,
+        .offline-send-btn.sending .send-icon {
+            display: none;
+        }
+
         #chat-interface-page.in-mini-phone {
             display: flex !important;
             position: absolute;
@@ -5476,7 +5492,21 @@
                 <div class="chat-input-wrapper">
                     <textarea rows="1" id="offline-chat-input" class="offline-input" placeholder="输入..." autocomplete="nope" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
                 </div>
-                <button class="offline-send-btn" onmousedown="event.preventDefault(); sendOfflineMessage();" ontouchstart="event.preventDefault(); sendOfflineMessage();" onclick="event.preventDefault();">发送</button>
+                <button class="offline-send-btn" onmousedown="event.preventDefault(); sendOfflineMessage();" ontouchstart="event.preventDefault(); sendOfflineMessage();" onclick="event.preventDefault();">
+                    <svg class="send-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="fill: #333;">
+                        <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z"/>
+                    </svg>
+                    <svg class="sending-icon" width="20" height="20" viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg" stroke="#fff">
+                        <g fill="none" fill-rule="evenodd">
+                            <g transform="translate(1 1)" stroke-width="2">
+                                <circle stroke-opacity=".5" cx="18" cy="18" r="18"/>
+                                <path d="M36 18c0-9.94-8.06-18-18-18">
+                                    <animateTransform attributeName="transform" type="rotate" from="0 18 18" to="360 18 18" dur="1s" repeatCount="indefinite"/>
+                                </path>
+                            </g>
+                        </g>
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -18249,26 +18279,35 @@ ${historyText}`;
 
         function sendOfflineMessage() {
             const input = document.getElementById('offline-chat-input');
+            const btn = document.querySelector('.offline-send-btn');
             const messageText = input.value.trim();
-            if (messageText === '' || !currentChatFriendId) return;
+            if (messageText === '' || !currentChatFriendId || btn.classList.contains('sending')) return;
 
-            const message = {
-                friendId: currentChatFriendId,
-                text: messageText,
-                type: 'sent',
-                timestamp: Date.now(),
-                isOfflineSeparate: true
-            };
+            btn.classList.add('sending');
+            btn.disabled = true;
 
-            dbAdd('chat_history', message, () => {
-                dbGet('friends', currentChatFriendId, friend => {
-                    if (friend) {
-                        appendOfflineMessage(message, friend);
-                        input.value = '';
-                        // Removed triggerAIResponse() for manual offline mode
-                    }
+            // Simulate a delay to show the sending status
+            setTimeout(() => {
+                const message = {
+                    friendId: currentChatFriendId,
+                    text: messageText,
+                    type: 'sent',
+                    timestamp: Date.now(),
+                    isOfflineSeparate: true
+                };
+
+                dbAdd('chat_history', message, () => {
+                    dbGet('friends', currentChatFriendId, friend => {
+                        if (friend) {
+                            appendOfflineMessage(message, friend, true, true);
+                            input.value = '';
+                        }
+                        // Restore button after message is processed
+                        btn.classList.remove('sending');
+                        btn.disabled = false;
+                    });
                 });
-            });
+            }, 500); // 500ms delay
         }
 
         function retryLastOfflineMessage() {
