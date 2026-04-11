@@ -14875,6 +14875,15 @@
                      prompt += `    - 用户的视角是【${settings.yourPerspective === 'second_person' ? '第二人称 (你)' : '第一人称 (我)'}】。\n`;
                 }
 
+                if (settings.writingStyle && settings.writingStyle !== 'default') {
+                    const styleWb = worldBooks.find(b => b.id === settings.writingStyle);
+                    if (styleWb) {
+                        prompt += `4.  **文风要求**: \n`;
+                        prompt += `    - 请严格遵循以下文风/风格设定进行创作：\n`;
+                        prompt += `      ${styleWb.content}\n`;
+                    }
+                }
+
             } else {
                 prompt += `\n【系统提示】重要：当前是普通的【微信线上聊天模式】，请你**完全沉浸式地伪装成一个真实人类**在微信上聊天。\n`;
                 prompt += `\n【关键要求：打字习惯必须匹配人设】\n`;
