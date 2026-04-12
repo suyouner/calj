@@ -5924,18 +5924,18 @@
                 <h3 style="text-align: center; margin-bottom: 20px; font-weight: 600;">选择模型预设</h3>
                 
                 <div class="custom-select-container">
-                    <select id="character-preset-select"></select>
+                    <select id="character-preset-select" onchange="loadCharacterModelPreset()"></select>
                 </div>
 
                 <div class="settings-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
                     <label>指定模型 (覆盖预设)</label>
-                    <div class="model-selection">
+                    <div>
                         <div class="custom-select-container" style="flex-grow: 1;">
                            <select id="character-model-select">
                                 <!-- Models will be populated here -->
                            </select>
                         </div>
-                        <button onclick="fetchCharacterModels()">拉取</button>
+                        <button onclick="fetchCharacterModels()" class="modal-button" style="margin-top: 10px;">拉取</button>
                     </div>
                 </div>
                 
