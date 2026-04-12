@@ -2704,6 +2704,24 @@
             border-radius: 12px;
             padding: 0 20px;
         }
+
+        .chat-info-model-preset-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .chat-info-model-preset-card .description {
+            flex-grow: 1;
+        }
+        
+        .chat-info-model-preset-card .arrow {
+            font-size: 18px;
+            color: #ccc;
+            margin-left: 10px;
+        }
         .chat-info-item {
             padding: 15px 0;
             border-bottom: 1px solid #f5f5f5;
@@ -5878,24 +5896,12 @@
                     </div>
                 </div>
 
-                <div class="settings-card" id="chat-info-model-preset-section" style="width: 100%; margin-top: 15px;">
+                <div class="settings-card" id="chat-info-model-preset-section" style="width: 100%; margin-top: 15px; padding: 15px 20px;">
                     <div class="settings-item">
-                        <label for="character-model-preset-select">模型预设</label>
-                        <div class="preset-actions">
-                            <select id="character-model-preset-select">
-                                <!-- Presets will be populated here -->
-                            </select>
-                            <button id="character-model-preset-load-btn" onclick="loadCharacterModelPreset()">加载</button>
-                        </div>
-                        <p class="description" style="margin-top: 5px; line-height: 1.5;">名称: <span id="character-preset-name-display">-</span><br>模型: <span id="character-preset-model-display">-</span></p>
-                    </div>
-                    <div class="settings-item" style="border-top: 1px solid #f5f5f5; padding-top: 15px; margin-top: 15px;">
-                        <label for="character-model-select">指定模型 (会覆盖预设)</label>
-                        <div class="model-selection">
-                            <select id="character-model-select">
-                                <!-- Models will be populated here -->
-                            </select>
-                            <button onclick="fetchCharacterModels()">拉取</button>
+                        <label>模型选择</label>
+                        <div class="chat-info-model-preset-card" onclick="openCharacterPresetModal()">
+                             <p class="description" style="margin: 0; line-height: 1.5;">名称: <span id="character-preset-name-display">-</span><br>模型: <span id="character-preset-model-display">-</span></p>
+                             <span class="arrow">></span>
                         </div>
                     </div>
                 </div>
@@ -5903,6 +5909,32 @@
                 <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 25px;">
                     <button id="save-chat-info-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: none; background-color: #333; color: white; font-size: 16px; font-weight: bold; cursor: pointer;">保存</button>
                     <button id="delete-friend-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: none; background-color: #ff3b30; color: white; font-size: 16px; font-weight: bold; cursor: pointer;">删除好友 / 退出群聊</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Character Preset Modal -->
+        <div class="modal-overlay" id="character-preset-modal" style="z-index: 800;">
+            <div class="modal-content" style="width: 320px; padding: 20px;">
+                <h3 style="text-align: center; margin-bottom: 20px; font-weight: 600;">选择模型预设</h3>
+                
+                <div id="character-preset-list" class="preset-list" style="max-height: 180px;">
+                    <!-- Presets will be loaded here -->
+                </div>
+
+                <div class="settings-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
+                    <label>指定模型 (覆盖预设)</label>
+                    <div class="model-selection">
+                        <select id="character-model-select">
+                            <!-- Models will be populated here -->
+                        </select>
+                        <button onclick="fetchCharacterModels()">拉取</button>
+                    </div>
+                </div>
+                
+                <div class="modal-actions" style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="cancel-btn" onclick="closeCharacterPresetModal()">取消</button>
+                    <button class="save-btn" onclick="saveCharacterModelSelection()">保存</button>
                 </div>
             </div>
         </div>
@@ -17095,6 +17127,94 @@ ${historyText}`;
         }
 
         // Chat Info Logic
+        function openCharacterPresetModal() {
+            const modal = document.getElementById('character-preset-modal');
+            const listContainer = document.getElementById('character-preset-list');
+            listContainer.innerHTML = '';
+            
+            let presetNames = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('preset_')) {
+                    presetNames.push(key.replace('preset_', ''));
+                }
+            }
+
+            if (presetNames.length === 0) {
+                listContainer.innerHTML = '<div style="text-align:center; color:#999; padding:10px; font-size: 13px;">暂无预设</div>';
+            } else {
+                presetNames.sort().forEach(name => {
+                    const item = document.createElement('label');
+                    item.className = 'preset-checkbox-item';
+                    
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.name = 'character-preset-radio';
+                    radio.value = name;
+                    
+                    const customCheck = document.createElement('div');
+                    customCheck.className = 'custom-checkbox';
+                    
+                    const span = document.createElement('span');
+                    span.textContent = name;
+                    
+                    item.appendChild(radio);
+                    item.appendChild(customCheck);
+                    item.appendChild(span);
+                    listContainer.appendChild(item);
+                });
+            }
+
+            if (currentChatFriendId) {
+                dbGet('friends', currentChatFriendId, friend => {
+                    if (friend && friend.characterModelPresetName) {
+                        const selectedRadio = listContainer.querySelector(`input[value="${friend.characterModelPresetName}"]`);
+                        if (selectedRadio) {
+                            selectedRadio.checked = true;
+                        }
+                    }
+                    if (friend && friend.characterModel) {
+                        const modelSelect = document.getElementById('character-model-select');
+                        if (!modelSelect.querySelector(`option[value="${friend.characterModel}"]`)) {
+                             const option = document.createElement('option');
+                             option.value = friend.characterModel;
+                             option.textContent = friend.characterModel;
+                             modelSelect.appendChild(option);
+                        }
+                        modelSelect.value = friend.characterModel;
+                        refreshCustomSelect(modelSelect);
+                    }
+                });
+            }
+            
+            modal.style.display = 'flex';
+        }
+
+        function closeCharacterPresetModal() {
+            document.getElementById('character-preset-modal').style.display = 'none';
+        }
+
+        function saveCharacterModelSelection() {
+            if (!currentChatFriendId) return;
+
+            const selectedPresetRadio = document.querySelector('#character-preset-list input[type="radio"]:checked');
+            const presetName = selectedPresetRadio ? selectedPresetRadio.value : '';
+            const modelOverride = document.getElementById('character-model-select').value;
+            
+            dbGet('friends', currentChatFriendId, friend => {
+                if (friend) {
+                    friend.characterModelPresetName = presetName;
+                    friend.characterModel = modelOverride;
+                    
+                    dbUpdate('friends', friend, () => {
+                        loadCharacterModelSettings(friend); // Refresh the display
+                        closeCharacterPresetModal();
+                        showToast('模型设置已保存');
+                    });
+                }
+            });
+        }
+
         function openChatInfo() {
             if (!currentChatFriendId) return;
             
@@ -17103,7 +17223,9 @@ ${historyText}`;
                     // Update UI with friend details
                     document.getElementById('chat-info-avatar').src = friend.avatar;
                     
+                    const modelPresetSection = document.getElementById('chat-info-model-preset-section');
                     if (friend.isGroup) {
+                        if(modelPresetSection) modelPresetSection.style.display = 'none';
                         document.getElementById('chat-info-personal-section').style.display = 'none';
                         document.getElementById('chat-info-my-avatar-section').style.display = 'none';
                         document.getElementById('chat-info-ai-settings-section').style.display = 'flex';
@@ -17171,6 +17293,7 @@ ${historyText}`;
                         });
 
                     } else {
+                        if(modelPresetSection) modelPresetSection.style.display = 'flex';
                         document.getElementById('chat-info-personal-section').style.display = 'block';
                         document.getElementById('chat-info-my-avatar-section').style.display = 'flex';
                         document.getElementById('chat-info-ai-settings-section').style.display = 'flex';
@@ -17256,57 +17379,23 @@ ${historyText}`;
         }
 
         function loadCharacterModelSettings(friend) {
-            const presetSelect = document.getElementById('character-model-preset-select');
-            const modelSelect = document.getElementById('character-model-select');
             const presetNameDisplay = document.getElementById('character-preset-name-display');
             const presetModelDisplay = document.getElementById('character-preset-model-display');
 
-            // 1. Populate Model Presets Dropdown
-            presetSelect.innerHTML = '<option value="">不使用预设/使用全局</option>';
-            let savedPresets = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('preset_')) {
-                    const name = key.replace('preset_', '');
-                    try {
-                        const data = JSON.parse(localStorage.getItem(key));
-                        if(data) savedPresets[name] = data;
-                    } catch(e) {}
-                }
-            }
-            Object.keys(savedPresets).forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                presetSelect.appendChild(option);
-            });
-            
-            // 2. Populate Character Specific Model Dropdown
-            modelSelect.innerHTML = '';
-            if (friend.characterModel) {
-                const option = document.createElement('option');
-                option.value = friend.characterModel;
-                option.textContent = friend.characterModel;
-                modelSelect.appendChild(option);
-            }
-            modelSelect.value = friend.characterModel || '';
-            
-            // 3. Display currently used preset info
-            if (friend.characterModelPresetName) {
-                const presetData = savedPresets[friend.characterModelPresetName];
-                presetSelect.value = friend.characterModelPresetName;
-                if (presetData) {
-                    presetNameDisplay.textContent = friend.characterModelPresetName;
-                    presetModelDisplay.textContent = presetData.model || '未指定';
-                }
+            const presetName = friend.characterModelPresetName;
+            const modelOverride = friend.characterModel;
+
+            if (modelOverride) {
+                presetNameDisplay.textContent = '自定义';
+                presetModelDisplay.textContent = modelOverride;
+            } else if (presetName) {
+                const presetData = JSON.parse(localStorage.getItem(`preset_${presetName}`) || '{}');
+                presetNameDisplay.textContent = presetName;
+                presetModelDisplay.textContent = presetData.model || '未指定';
             } else {
-                presetSelect.value = '';
                 presetNameDisplay.textContent = '-';
                 presetModelDisplay.textContent = '-';
             }
-            
-            refreshCustomSelect(presetSelect);
-            refreshCustomSelect(modelSelect);
         }
 
         function loadCharacterModelPreset() {
@@ -17325,11 +17414,30 @@ ${historyText}`;
                 }
             });
         }
+            let savedPresets = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('preset_')) {
+                    const name = key.replace('preset_', '');
+                    try {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        if(data) savedPresets[name] = data;
+                    } catch(e) {}
+                }
+            }
+            Object.keys(savedPresets).forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                presetSelect.appendChild(option);
+            });
+            
 
         async function fetchCharacterModels() {
             if (!currentChatFriendId) return;
-
-            const presetName = document.getElementById('character-model-preset-select').value;
+            
+            const selectedPresetRadio = document.querySelector('#character-preset-list input[type="radio"]:checked');
+            const presetName = selectedPresetRadio ? selectedPresetRadio.value : '';
             let apiUrl, apiKey;
 
             if (presetName) {
