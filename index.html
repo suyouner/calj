@@ -4300,7 +4300,7 @@
         </div>
     </div>
 
-    <div id="activation-page">
+    <div id="activation-page" style="display: none;">
         <div class="activation-content">
             <div class="activation-title">请输入激活码</div>
             <input type="text" id="activation-code-input" class="activation-input" placeholder="输&#8203;入&#8203;激&#8203;活&#8203;码" style="-webkit-text-security: disc;">
@@ -4308,7 +4308,7 @@
         </div>
     </div>
 
-    <div class="phone-container" id="main-app-container">
+    <div class="phone-container" id="main-app-container" style="display: none;">
         <div class="status-bar">
             <span class="time"></span>
             <div class="status-bar-right">
@@ -5728,27 +5728,6 @@
                     </div>
                 </div>
 
-                <div class="chat-info-card" id="chat-info-custom-api-section" style="margin-bottom: 15px;">
-                    <div class="chat-info-item">
-                        <div class="chat-info-label" style="font-size: 14px; font-weight: 500; color: #333; margin-bottom: 10px;">专属 API 设置</div>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <select id="friend-api-preset-select" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white;" onchange="updateFriendInfo('apiPreset', this.value)">
-                                    <option value="">使用全局设置</option>
-                                    <!-- Global presets will be loaded here -->
-                                </select>
-                            </div>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <select id="friend-model-select" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white;" onchange="updateFriendInfo('model', this.value)">
-                                    <option value="">使用全局模型</option>
-                                </select>
-                                <button onclick="fetchFriendModels()" style="padding: 8px 15px; border: none; border-radius: 8px; background: #07c160; color: white; cursor: pointer; white-space: nowrap;">拉取模型</button>
-                            </div>
-                            <p style="font-size: 12px; color: #888; margin: 0;">提示：选择专属预设后点击拉取模型，即可为此角色单独设置模型。</p>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="chat-info-card" id="chat-info-group-section" style="display: none; margin-bottom: 15px;">
                     <div class="chat-info-item">
                         <div class="chat-info-label">群名称</div>
@@ -5895,6 +5874,28 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card" id="chat-info-model-preset-section" style="width: 100%; margin-top: 15px;">
+                    <div class="settings-item">
+                        <label for="character-model-preset-select">模型预设</label>
+                        <div class="preset-actions">
+                            <select id="character-model-preset-select">
+                                <!-- Presets will be populated here -->
+                            </select>
+                            <button id="character-model-preset-load-btn" onclick="loadCharacterModelPreset()">加载</button>
+                        </div>
+                        <p class="description" style="margin-top: 5px; line-height: 1.5;">名称: <span id="character-preset-name-display">-</span><br>模型: <span id="character-preset-model-display">-</span></p>
+                    </div>
+                    <div class="settings-item" style="border-top: 1px solid #f5f5f5; padding-top: 15px; margin-top: 15px;">
+                        <label for="character-model-select">指定模型 (会覆盖预设)</label>
+                        <div class="model-selection">
+                            <select id="character-model-select">
+                                <!-- Models will be populated here -->
+                            </select>
+                            <button onclick="fetchCharacterModels()">拉取</button>
                         </div>
                     </div>
                 </div>
@@ -13754,39 +13755,26 @@
         async function triggerAIResponse(isContinue = false, targetFriendId = currentChatFriendId) {
             if (!targetFriendId || isAITyping) return;
 
-            let configStr = localStorage.getItem('globalConfig');
-            let config = configStr ? JSON.parse(configStr) : {};
-            
-            dbGet('friends', targetFriendId, async friend => {
-                if (!friend) {
-                    showToast("找不到好友信息");
-                    return;
-                }
-                
-                // Override with friend specific API preset/model if set
-                if (friend.apiPreset) {
-                    const presetDataStr = localStorage.getItem(`preset_${friend.apiPreset}`);
-                    if (presetDataStr) {
-                        const presetData = JSON.parse(presetDataStr);
-                        config.apiUrl = presetData.apiUrl || '';
-                        config.apiKey = presetData.apiKey || '';
-                    }
-                }
-                if (friend.model) {
-                    config.model = friend.model;
-                }
+            const configStr = localStorage.getItem('globalConfig');
+            if (!configStr) {
+                showToast('请先在设置页面配置 API 信息');
+                return;
+            }
+            const config = JSON.parse(configStr);
+            if (!config.apiKey || !config.model) {
+                showToast('请先配置完整的 API Key 和模型');
+                return;
+            }
 
-                if (!config.apiKey || !config.model) {
-                    showToast('请先配置完整的 API Key 和模型（全局或专属）');
-                    return;
-                }
+            isAITyping = true;
+            voiceIcon.style.opacity = '0.5';
 
-                isAITyping = true;
-                voiceIcon.style.opacity = '0.5';
+            showTypingIndicator(targetFriendId);
 
-                showTypingIndicator(targetFriendId);
+            try {
+                dbGet('friends', targetFriendId, async friend => {
+                    if (!friend) throw new Error("Friend not found");
 
-                try {
                     let userPersona = null;
                     if (friend.myPersonaId) {
                         userPersona = await new Promise(resolve => dbGet('my_personas', friend.myPersonaId, resolve));
@@ -14631,6 +14619,12 @@
                     }
                 };
             });
+        } catch (e) {
+            isAITyping = false;
+            voiceIcon.style.opacity = '1';
+            hideTypingIndicator(currentChatFriendId);
+            showToast('发生错误');
+        }
         }
 
         const Lunar = {
@@ -17117,8 +17111,7 @@ ${historyText}`;
                         document.getElementById('chat-info-active-chat-section').style.display = 'none';
                         document.getElementById('chat-info-thought-section').style.display = 'none';
                         document.getElementById('chat-info-group-section').style.display = 'block';
-                        document.getElementById('chat-info-custom-api-section').style.display = 'none';
-
+                        
                         document.getElementById('group-info-name').value = friend.name;
                         document.getElementById('short-term-memory-input').value = friend.shortTermMemory || '';
                         
@@ -17185,35 +17178,8 @@ ${historyText}`;
                         document.getElementById('chat-info-active-chat-section').style.display = 'flex';
                         document.getElementById('chat-info-thought-section').style.display = 'flex';
                         document.getElementById('chat-info-group-section').style.display = 'none';
-                        document.getElementById('chat-info-custom-api-section').style.display = 'block';
-
+                        
                         document.getElementById('chat-info-remark').value = friend.name;
-
-                        // Load Global Presets into friend preset select
-                        const friendPresetSelect = document.getElementById('friend-api-preset-select');
-                        friendPresetSelect.innerHTML = '<option value="">使用全局设置</option>';
-                        for (let i = 0; i < localStorage.length; i++) {
-                            const key = localStorage.key(i);
-                            if (key.startsWith('preset_')) {
-                                const name = key.replace('preset_', '');
-                                const option = document.createElement('option');
-                                option.value = name;
-                                option.textContent = name;
-                                friendPresetSelect.appendChild(option);
-                            }
-                        }
-                        
-                        friendPresetSelect.value = friend.apiPreset || '';
-                        
-                        const friendModelSelect = document.getElementById('friend-model-select');
-                        friendModelSelect.innerHTML = '<option value="">使用全局模型</option>';
-                        if (friend.model) {
-                            const option = document.createElement('option');
-                            option.value = friend.model;
-                            option.textContent = friend.model;
-                            friendModelSelect.appendChild(option);
-                            friendModelSelect.value = friend.model;
-                        }
                         
                         if (!friend.realName) {
                             friend.realName = friend.name;
@@ -17274,6 +17240,9 @@ ${historyText}`;
                             summarizeContainer.style.display = autoSummarize ? 'block' : 'none';
                         }
                         document.getElementById('summarize-interval-input').value = friend.summarizeInterval || '';
+                        
+                        // Load character model preset info
+                        loadCharacterModelSettings(friend);
                     }
 
                     // Avatar Display (Both)
@@ -17285,6 +17254,145 @@ ${historyText}`;
                 }
             });
         }
+
+        function loadCharacterModelSettings(friend) {
+            const presetSelect = document.getElementById('character-model-preset-select');
+            const modelSelect = document.getElementById('character-model-select');
+            const presetNameDisplay = document.getElementById('character-preset-name-display');
+            const presetModelDisplay = document.getElementById('character-preset-model-display');
+
+            // 1. Populate Model Presets Dropdown
+            presetSelect.innerHTML = '<option value="">不使用预设/使用全局</option>';
+            let savedPresets = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('preset_')) {
+                    const name = key.replace('preset_', '');
+                    try {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        if(data) savedPresets[name] = data;
+                    } catch(e) {}
+                }
+            }
+            Object.keys(savedPresets).forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                presetSelect.appendChild(option);
+            });
+            
+            // 2. Populate Character Specific Model Dropdown
+            modelSelect.innerHTML = '';
+            if (friend.characterModel) {
+                const option = document.createElement('option');
+                option.value = friend.characterModel;
+                option.textContent = friend.characterModel;
+                modelSelect.appendChild(option);
+            }
+            modelSelect.value = friend.characterModel || '';
+            
+            // 3. Display currently used preset info
+            if (friend.characterModelPresetName) {
+                const presetData = savedPresets[friend.characterModelPresetName];
+                presetSelect.value = friend.characterModelPresetName;
+                if (presetData) {
+                    presetNameDisplay.textContent = friend.characterModelPresetName;
+                    presetModelDisplay.textContent = presetData.model || '未指定';
+                }
+            } else {
+                presetSelect.value = '';
+                presetNameDisplay.textContent = '-';
+                presetModelDisplay.textContent = '-';
+            }
+            
+            refreshCustomSelect(presetSelect);
+            refreshCustomSelect(modelSelect);
+        }
+
+        function loadCharacterModelPreset() {
+            if (!currentChatFriendId) return;
+            const presetName = document.getElementById('character-model-preset-select').value;
+            
+            dbGet('friends', currentChatFriendId, friend => {
+                if (friend) {
+                    friend.characterModelPresetName = presetName;
+                    // Loading a preset should clear the specific model override
+                    friend.characterModel = '';
+                    dbUpdate('friends', friend, () => {
+                        showToast('模型预设已加载');
+                        loadCharacterModelSettings(friend);
+                    });
+                }
+            });
+        }
+
+        async function fetchCharacterModels() {
+            if (!currentChatFriendId) return;
+
+            const presetName = document.getElementById('character-model-preset-select').value;
+            let apiUrl, apiKey;
+
+            if (presetName) {
+                const presetData = JSON.parse(localStorage.getItem(`preset_${presetName}`));
+                apiUrl = presetData.apiUrl;
+                apiKey = presetData.apiKey;
+            } else {
+                const globalConfig = JSON.parse(localStorage.getItem('globalConfig') || '{}');
+                apiUrl = globalConfig.apiUrl;
+                apiKey = globalConfig.apiKey;
+            }
+
+            if (!apiKey) {
+                showToast('请先在主设置中配置API Key或选择一个有效的预设');
+                return;
+            }
+
+            const modelSelect = document.getElementById('character-model-select');
+            modelSelect.innerHTML = '<option>正在拉取...</option>';
+
+            try {
+                let models = [];
+                if (!apiUrl) { // Gemini
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+                    if (!response.ok) throw new Error('Gemini API error');
+                    const data = await response.json();
+                    models = data.models.map(m => m.name).sort();
+                } else { // OpenAI Proxy
+                    let modelsUrl = apiUrl.endsWith('/') ? `${apiUrl}v1/models` : `${apiUrl}/v1/models`;
+                    const response = await fetch(modelsUrl, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+                    if (!response.ok) throw new Error('Proxy API error');
+                    const data = await response.json();
+                    models = (data.data || []).map(m => m.id).sort();
+                }
+
+                modelSelect.innerHTML = '';
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    modelSelect.appendChild(option);
+                });
+
+                dbGet('friends', currentChatFriendId, friend => {
+                    if (friend.characterModel && models.includes(friend.characterModel)) {
+                        modelSelect.value = friend.characterModel;
+                    }
+                });
+                
+                refreshCustomSelect(modelSelect);
+                modelSelect.onchange = () => {
+                    dbGet('friends', currentChatFriendId, friend => {
+                        friend.characterModel = modelSelect.value;
+                        dbUpdate('friends', friend);
+                    });
+                };
+
+            } catch (error) {
+                console.error("Fetch char models error:", error);
+                modelSelect.innerHTML = '<option>拉取失败</option>';
+            }
+        }
+
 
         function toggleGroupMemoryInterop(isChecked) {
             const container = document.getElementById('group-memory-interop-roles');
@@ -17706,10 +17814,6 @@ ${historyText}`;
                         friend.showThoughtText = value;
                     } else if (field === 'separateOfflineUI') {
                         friend.separateOfflineUI = value;
-                    } else if (field === 'apiPreset') {
-                        friend.apiPreset = value;
-                    } else if (field === 'model') {
-                        friend.model = value;
                     }
                     
                     dbUpdate('friends', friend, () => {
@@ -21090,92 +21194,9 @@ ${post.content}
         '#e3cfb4'
     ];
 
-        async function fetchFriendModels() {
-            const friendPresetSelect = document.getElementById('friend-api-preset-select');
-            const selectedPresetName = friendPresetSelect.value;
-            const friendModelSelect = document.getElementById('friend-model-select');
-            
-            if (!selectedPresetName) {
-                showToast('请先选择一个专属预设');
-                return;
-            }
-
-            const presetJson = localStorage.getItem('preset_' + selectedPresetName);
-            if (!presetJson) {
-                showToast('预设数据不存在');
-                return;
-            }
-
-            try {
-                const preset = JSON.parse(presetJson);
-                const apiUrl = preset.apiUrl;
-                const apiKey = preset.apiKey;
-                
-                if (!apiKey) {
-                    showToast('该预设缺少 API Key');
-                    return;
-                }
-
-                friendModelSelect.innerHTML = '<option value="">正在拉取...</option>';
-
-                let models = [];
-                if (!apiUrl) {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-                    if (!response.ok) throw new Error(`Gemini API error! status: ${response.status}`);
-                    const data = await response.json();
-                    models = data.models.map(m => m.name).sort();
-                } else {
-                    let modelsUrl;
-                    const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
-                    if (/\/v\d+$/.test(baseUrl)) {
-                        modelsUrl = `${baseUrl}/models`;
-                    } else {
-                        modelsUrl = `${baseUrl}/v1/models`;
-                    }
-
-                    const response = await fetch(modelsUrl, {
-                        headers: { 'Authorization': `Bearer ${apiKey}` }
-                    });
-                    if (!response.ok) throw new Error(`Proxy API error! status: ${response.status}`);
-                    const data = await response.json();
-                    if (data.data && Array.isArray(data.data)) {
-                        models = data.data.map(model => model.id).sort();
-                    } else if (Array.isArray(data)) {
-                        models = data.map(model => model.id).sort();
-                    } else {
-                        models = [];
-                    }
-                }
-
-                friendModelSelect.innerHTML = '<option value="">使用全局模型</option>';
-                if (models.length === 0) {
-                    showToast('未找到模型');
-                    return;
-                }
-                
-                models.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model;
-                    option.textContent = model;
-                    friendModelSelect.appendChild(option);
-                });
-
-                // Restore selected model if it exists
-                dbGet('friends', currentChatFriendId, friend => {
-                    if (friend && friend.model && models.includes(friend.model)) {
-                        friendModelSelect.value = friend.model;
-                    }
-                });
-
-                showToast('模型拉取成功');
-
-            } catch (error) {
-                console.error('Error fetching friend models:', error);
-                friendModelSelect.innerHTML = '<option value="">拉取失败</option>';
-                showToast('拉取失败，请检查网络和预设配置');
-            }
-        }
-
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
