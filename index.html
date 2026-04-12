@@ -17706,6 +17706,10 @@ ${historyText}`;
                         friend.showThoughtText = value;
                     } else if (field === 'separateOfflineUI') {
                         friend.separateOfflineUI = value;
+                    } else if (field === 'apiPreset') {
+                        friend.apiPreset = value;
+                    } else if (field === 'model') {
+                        friend.model = value;
                     }
                     
                     dbUpdate('friends', friend, () => {
@@ -21172,9 +21176,6 @@ ${post.content}
             }
         }
 
-</script>
-</body>
-</html>
 </script>
 </body>
 </html>
