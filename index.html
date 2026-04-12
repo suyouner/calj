@@ -5923,19 +5923,18 @@
             <div class="modal-content" style="width: 320px; padding: 20px;">
                 <h3 style="text-align: center; margin-bottom: 20px; font-weight: 600;">选择模型预设</h3>
                 
-                <div class="custom-select-container">
-                    <select id="character-preset-select" onchange="loadCharacterModelPreset()"></select>
+                <div class="custom-select-wrapper" style="width: 100%;">
+                    <select id="character-preset-select" onchange="loadCharacterModelPreset()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 12px; font-size: 14px; background: white;"></select>
                 </div>
 
                 <div class="settings-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
                     <label>指定模型 (覆盖预设)</label>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <div class="custom-select-container" style="flex-grow: 1;">
-                           <select id="character-model-select">
-                                <!-- Models will be populated here -->
+                        <div class="custom-select-wrapper" style="flex-grow: 1; min-width: 0;">
+                           <select id="character-model-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 12px; font-size: 14px; background: white;">
                            </select>
                         </div>
-                        <button onclick="fetchCharacterModels()" class="modal-button" style="padding: 10px 15px; border-radius: 8px; border: none; background-color: #333; color: white; cursor: pointer; white-space: nowrap;">拉取</button>
+                        <button onclick="fetchCharacterModels()" class="modal-button" style="height: 38px; padding: 0 15px; border-radius: 8px; border: none; background-color: #333; color: white; cursor: pointer; white-space: nowrap; display: flex; align-items: center; justify-content: center;">拉取</button>
                     </div>
                 </div>
                 
@@ -17443,7 +17442,7 @@ ${historyText}`;
             let apiUrl, apiKey;
 
             if (presetName) {
-                const presetData = JSON.parse(localStorage.getItem(`preset_${presetName}`));
+                const presetData = JSON.parse(localStorage.getItem(`preset_${presetName}`) || '{}');
                 apiUrl = presetData.apiUrl;
                 apiKey = presetData.apiKey;
             } else {
@@ -17468,7 +17467,13 @@ ${historyText}`;
                     const data = await response.json();
                     models = data.models.map(m => m.name).sort();
                 } else { // OpenAI Proxy
-                    let modelsUrl = apiUrl.endsWith('/') ? `${apiUrl}v1/models` : `${apiUrl}/v1/models`;
+                    let modelsUrl;
+                    const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
+                    if (/\/v\d+$/.test(baseUrl)) {
+                        modelsUrl = `${baseUrl}/models`;
+                    } else {
+                        modelsUrl = `${baseUrl}/v1/models`;
+                    }
                     const response = await fetch(modelsUrl, { headers: { 'Authorization': `Bearer ${apiKey}` } });
                     if (!response.ok) throw new Error('Proxy API error');
                     const data = await response.json();
@@ -17496,10 +17501,13 @@ ${historyText}`;
                         dbUpdate('friends', friend);
                     });
                 };
+                
+                showToast('模型列表拉取成功！');
 
             } catch (error) {
                 console.error("Fetch char models error:", error);
                 modelSelect.innerHTML = '<option>拉取失败</option>';
+                showToast('无法拉取模型列表，请检查网络和API信息。');
             }
         }
 
