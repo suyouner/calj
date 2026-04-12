@@ -2829,6 +2829,32 @@
             height: 40px;
         }
 
+        /* Fake Photo Bubble Styles */
+        .message-bubble.fake-photo-bubble {
+            background-color: #e0e0e0 !important;
+            color: #888 !important;
+            padding: 0 !important;
+            width: 160px;
+            height: 200px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+            position: relative;
+            border: 1px solid #d0d0d0;
+        }
+        .message-bubble.fake-photo-bubble:after {
+            display: none;
+        }
+        .fake-photo-text {
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
+        }
+
         /* Transfer Bubble Styles */
         .message-bubble.transfer-bubble {
             background-color: #f79c4a !important;
@@ -5467,6 +5493,12 @@
             <!-- Action Panel -->
             <div id="action-panel">
                 <div class="action-grid-container">
+                    <div class="action-item" onclick="openFakePhotoUploadModal()">
+                        <div class="action-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                        </div>
+                        <span class="action-name">拍照</span>
+                    </div>
                     <div class="action-item" onclick="triggerActionImageUpload()">
                         <div class="action-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
@@ -6007,6 +6039,17 @@
                 </div>
             </div>
         </div>
+
+    <!-- Fake Photo View Modal -->
+    <div class="modal-overlay" id="fake-photo-view-modal" onclick="closeFakePhotoViewModal()">
+        <div class="modal-content" onclick="event.stopPropagation()" style="background: #f7f7f7;">
+            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 15px;">照片内容</h3>
+            <div id="fake-photo-view-content" style="font-size: 15px; color: #333; line-height: 1.6; word-wrap: break-word; white-space: pre-wrap; padding: 10px; background: white; border-radius: 8px; min-height: 100px;"></div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="confirm-btn" style="background-color: #000; color: #fff; width: 100%;" onclick="closeFakePhotoViewModal()">关闭</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Custom Confirmation Modal -->
     <div class="confirm-modal-overlay" id="custom-confirm-modal">
@@ -11424,6 +11467,66 @@
         const actionPanel = document.getElementById('action-panel');
         const actionImageInput = document.getElementById('action-image-input');
         let lastMessageTimestamp = null;
+
+        function openFakePhotoUploadModal() {
+            if (!currentChatFriendId) {
+                showToast('请先选择一个聊天');
+                return;
+            }
+            toggleActionPanel();
+            showGenericStickerModal({
+                title: '发送照片',
+                body: `
+                    <label style="font-weight:600;">输入照片描述，告诉对方你拍了什么：</label>
+                    <textarea id="fake-photo-desc-input" placeholder="例如：我拍了一张咖啡拉花的照片..." style="height: 100px; resize: none; margin-top: 10px; width: 100%; box-sizing: border-box;"></textarea>
+                `,
+                onConfirm: () => {
+                    const desc = document.getElementById('fake-photo-desc-input').value.trim();
+                    if (!desc) {
+                        showToast('请输入照片描述');
+                        return false;
+                    }
+                    sendFakePhoto(desc);
+                    return true;
+                }
+            });
+        }
+
+        function sendFakePhoto(desc) {
+            const message = {
+                friendId: currentChatFriendId,
+                text: `[照片] ${desc}`, // Used for system prompt parsing
+                type: 'sent',
+                timestamp: Date.now(),
+                isFakePhoto: true,
+                fakePhotoDesc: desc
+            };
+
+            addMessageToUI(message);
+            dbAdd('chat_history', message);
+
+            dbGet('friends', currentChatFriendId, friend => {
+                if (friend) {
+                    friend.lastMsg = `[照片]`;
+                    friend.lastTime = getCurrentTimeStr();
+                    friend.lastActivityTimestamp = Date.now();
+                    dbUpdate('friends', friend, () => {
+                        if (document.getElementById('wechat-page').classList.contains('active')) {
+                            renderChatList();
+                        }
+                    });
+                }
+            });
+        }
+
+        function openFakePhotoViewModal(desc) {
+            document.getElementById('fake-photo-view-content').textContent = desc || '无内容';
+            document.getElementById('fake-photo-view-modal').style.display = 'flex';
+        }
+
+        function closeFakePhotoViewModal() {
+            document.getElementById('fake-photo-view-modal').style.display = 'none';
+        }
         let currentQuote = null;
 
         function cancelQuote() {
@@ -12723,6 +12826,82 @@
             }
 
             // Handle Transfer messages
+            if (msg.isFakePhoto) {
+                const wrapper = document.createElement('div');
+                wrapper.className = `message-bubble-wrapper ${msg.type}`;
+                wrapper.dataset.msgId = msg.id || msg.timestamp;
+
+                const checkbox = document.createElement('div');
+                checkbox.className = 'message-checkbox';
+                wrapper.appendChild(checkbox);
+
+                const contentGroup = document.createElement('div');
+                contentGroup.className = 'message-content-group';
+
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${msg.type} fake-photo-bubble`;
+                
+                bubble.innerHTML = `
+                    <span class="fake-photo-text">点击查看</span>
+                `;
+
+                attachMessageEvents(bubble, msg);
+
+                bubble.onclick = (e) => {
+                    if (isSelectionMode) {
+                        e.stopPropagation();
+                        toggleMessageSelection(msg.id || msg.timestamp);
+                        return;
+                    }
+                    e.stopPropagation();
+                    openFakePhotoViewModal(msg.fakePhotoDesc);
+                };
+
+                contentGroup.appendChild(bubble);
+
+                const avatar = document.createElement('img');
+                avatar.className = 'chat-avatar-placeholder';
+                if (msg.type === 'received') {
+                    avatar.onclick = (e) => {
+                        e.stopPropagation();
+                        handleAvatarClick(msg.friendId);
+                    };
+                }
+                
+                const hideDisplay = friend ? friend.avatarDisplay : 'show_all';
+                if (msg.type === 'received' && (hideDisplay === 'hide_other' || hideDisplay === 'hide_both')) {
+                    avatar.style.display = 'none';
+                } else if (msg.type === 'sent' && (hideDisplay === 'hide_mine' || hideDisplay === 'hide_both')) {
+                    avatar.style.display = 'none';
+                }
+
+                if (msg.type === 'received') {
+                    if (friend && friend.isGroup && msg.senderAvatar) {
+                        avatar.src = msg.senderAvatar;
+                    } else {
+                        avatar.src = friend ? friend.avatar : '';
+                    }
+                } else {
+                    if (friend && friend.myAvatar) avatar.src = friend.myAvatar;
+                    else {
+                        avatar.src = (profile && profile.avatar) ? profile.avatar : 'https://via.placeholder.com/150';
+                    }
+                }
+
+                if (msg.type === 'received') {
+                    wrapper.appendChild(avatar);
+                    wrapper.appendChild(contentGroup);
+                } else {
+                    wrapper.appendChild(contentGroup);
+                    wrapper.appendChild(avatar);
+                }
+
+                container.appendChild(wrapper);
+                if (shouldScroll) container.scrollTop = container.scrollHeight;
+                
+                return bubble;
+            }
+
             if (msg.isTransfer) {
                 const wrapper = document.createElement('div');
                 wrapper.className = `message-bubble-wrapper ${msg.type}`;
@@ -15082,6 +15261,8 @@
 
                 if (msg.isLocation) {
                     text = `[发送了位置: ${msg.locationName}${msg.locationDetail ? ` (${msg.locationDetail})` : ''}]`;
+                } else if (msg.isFakePhoto) {
+                    text = `[向你发送了一张新拍的照片，照片内容是：${msg.fakePhotoDesc}]`;
                 } else if (msg.isSticker) {
                     const src = msg.text;
                     const desc = msg.stickerDescription ? `(含义: ${msg.stickerDescription})` : '';
