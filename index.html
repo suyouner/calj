@@ -5918,9 +5918,7 @@
             <div class="modal-content" style="width: 320px; padding: 20px;">
                 <h3 style="text-align: center; margin-bottom: 20px; font-weight: 600;">选择模型预设</h3>
                 
-                <div id="character-preset-list" class="preset-list" style="max-height: 180px;">
-                    <!-- Presets will be loaded here -->
-                </div>
+                <select id="character-preset-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 10px;"></select>
 
                 <div class="settings-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
                     <label>指定模型 (覆盖预设)</label>
@@ -17127,68 +17125,57 @@ ${historyText}`;
         }
 
         // Chat Info Logic
-        function openCharacterPresetModal() {
-            const modal = document.getElementById('character-preset-modal');
-            const listContainer = document.getElementById('character-preset-list');
-            listContainer.innerHTML = '';
-            
-            let presetNames = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('preset_')) {
-                    presetNames.push(key.replace('preset_', ''));
+            function openCharacterPresetModal() {
+                const modal = document.getElementById('character-preset-modal');
+                const select = document.getElementById('character-preset-select');
+                select.innerHTML = '';
+
+                let presetNames = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('preset_')) {
+                        presetNames.push(key.replace('preset_', ''));
+                    }
                 }
-            }
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = "";
+                defaultOption.textContent = "不使用预设";
+                select.appendChild(defaultOption);
 
-            if (presetNames.length === 0) {
-                listContainer.innerHTML = '<div style="text-align:center; color:#999; padding:10px; font-size: 13px;">暂无预设</div>';
-            } else {
-                presetNames.sort().forEach(name => {
-                    const item = document.createElement('label');
-                    item.className = 'preset-checkbox-item';
-                    
-                    const radio = document.createElement('input');
-                    radio.type = 'radio';
-                    radio.name = 'character-preset-radio';
-                    radio.value = name;
-                    
-                    const customCheck = document.createElement('div');
-                    customCheck.className = 'custom-checkbox';
-                    
-                    const span = document.createElement('span');
-                    span.textContent = name;
-                    
-                    item.appendChild(radio);
-                    item.appendChild(customCheck);
-                    item.appendChild(span);
-                    listContainer.appendChild(item);
-                });
-            }
+                if (presetNames.length > 0) {
+                    presetNames.sort().forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        select.appendChild(option);
+                    });
+                }
 
-            if (currentChatFriendId) {
-                dbGet('friends', currentChatFriendId, friend => {
-                    if (friend && friend.characterModelPresetName) {
-                        const selectedRadio = listContainer.querySelector(`input[value="${friend.characterModelPresetName}"]`);
-                        if (selectedRadio) {
-                            selectedRadio.checked = true;
+                if (currentChatFriendId) {
+                    dbGet('friends', currentChatFriendId, friend => {
+                        if (friend) {
+                            select.value = friend.characterModelPresetName || "";
+                            
+                            const modelSelect = document.getElementById('character-model-select');
+                            if (friend.characterModel) {
+                                if (!modelSelect.querySelector(`option[value="${friend.characterModel}"]`)) {
+                                     const option = document.createElement('option');
+                                     option.value = friend.characterModel;
+                                     option.textContent = friend.characterModel;
+                                     modelSelect.appendChild(option);
+                                }
+                                modelSelect.value = friend.characterModel;
+                            } else {
+                                modelSelect.value = '';
+                            }
+                            refreshCustomSelect(modelSelect);
                         }
-                    }
-                    if (friend && friend.characterModel) {
-                        const modelSelect = document.getElementById('character-model-select');
-                        if (!modelSelect.querySelector(`option[value="${friend.characterModel}"]`)) {
-                             const option = document.createElement('option');
-                             option.value = friend.characterModel;
-                             option.textContent = friend.characterModel;
-                             modelSelect.appendChild(option);
-                        }
-                        modelSelect.value = friend.characterModel;
-                        refreshCustomSelect(modelSelect);
-                    }
-                });
+                    });
+                }
+                
+                modal.style.display = 'flex';
             }
-            
-            modal.style.display = 'flex';
-        }
 
         function closeCharacterPresetModal() {
             document.getElementById('character-preset-modal').style.display = 'none';
@@ -17197,8 +17184,7 @@ ${historyText}`;
         function saveCharacterModelSelection() {
             if (!currentChatFriendId) return;
 
-            const selectedPresetRadio = document.querySelector('#character-preset-list input[type="radio"]:checked');
-            const presetName = selectedPresetRadio ? selectedPresetRadio.value : '';
+            const presetName = document.getElementById('character-preset-select').value;
             const modelOverride = document.getElementById('character-model-select').value;
             
             dbGet('friends', currentChatFriendId, friend => {
