@@ -2722,6 +2722,11 @@
             color: #ccc;
             margin-left: 10px;
         }
+
+        #character-preset-modal .custom-select-container {
+            margin-bottom: 10px;
+        }
+
         .chat-info-item {
             padding: 15px 0;
             border-bottom: 1px solid #f5f5f5;
@@ -5918,14 +5923,18 @@
             <div class="modal-content" style="width: 320px; padding: 20px;">
                 <h3 style="text-align: center; margin-bottom: 20px; font-weight: 600;">选择模型预设</h3>
                 
-                <select id="character-preset-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 10px;"></select>
+                <div class="custom-select-container">
+                    <select id="character-preset-select"></select>
+                </div>
 
                 <div class="settings-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
                     <label>指定模型 (覆盖预设)</label>
                     <div class="model-selection">
-                        <select id="character-model-select">
-                            <!-- Models will be populated here -->
-                        </select>
+                        <div class="custom-select-container" style="flex-grow: 1;">
+                           <select id="character-model-select">
+                                <!-- Models will be populated here -->
+                           </select>
+                        </div>
                         <button onclick="fetchCharacterModels()">拉取</button>
                     </div>
                 </div>
@@ -17171,7 +17180,14 @@ ${historyText}`;
                             }
                             refreshCustomSelect(modelSelect);
                         }
+                        // Refresh both selects after friend data is loaded
+                        refreshCustomSelect(select);
+                        refreshCustomSelect(document.getElementById('character-model-select'));
                     });
+                } else {
+                    // Refresh even if no friend, for global settings
+                    refreshCustomSelect(select);
+                    refreshCustomSelect(document.getElementById('character-model-select'));
                 }
                 
                 modal.style.display = 'flex';
