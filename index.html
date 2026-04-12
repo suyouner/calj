@@ -2831,8 +2831,12 @@
 
         /* Fake Photo Bubble Styles */
         .message-bubble.fake-photo-bubble {
-            background-color: #e0e0e0 !important;
-            color: #888 !important;
+            background-color: #e5e5e5 !important;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0 100 L 35 40 L 65 70 L 80 50 L 100 70 V 100 H 0 Z" fill="%23ffffff"/><circle cx="70" cy="30" r="12" fill="%23ffffff"/></svg>') !important;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: #333 !important;
             padding: 0 !important;
             width: 160px;
             height: 200px;
@@ -2844,15 +2848,21 @@
             cursor: pointer;
             position: relative;
             border: 1px solid #d0d0d0;
+            overflow: hidden;
         }
         .message-bubble.fake-photo-bubble:after {
             display: none;
         }
         .fake-photo-text {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 500;
-            letter-spacing: 2px;
-            text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
+            letter-spacing: 1px;
+            color: #555;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 6px 12px;
+            border-radius: 12px;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
         }
 
         /* Transfer Bubble Styles */
@@ -11477,8 +11487,8 @@
             showGenericStickerModal({
                 title: '发送照片',
                 body: `
-                    <label style="font-weight:600;">输入照片描述，告诉对方你拍了什么：</label>
-                    <textarea id="fake-photo-desc-input" placeholder="例如：我拍了一张咖啡拉花的照片..." style="height: 100px; resize: none; margin-top: 10px; width: 100%; box-sizing: border-box;"></textarea>
+                    <label style="font-weight:600;">照片描述：</label>
+                    <textarea id="fake-photo-desc-input" placeholder="详细描述照片..." style="height: 100px; resize: none; margin-top: 10px; width: 100%; box-sizing: border-box;"></textarea>
                 `,
                 onConfirm: () => {
                     const desc = document.getElementById('fake-photo-desc-input').value.trim();
@@ -12842,7 +12852,7 @@
                 bubble.className = `message-bubble ${msg.type} fake-photo-bubble`;
                 
                 bubble.innerHTML = `
-                    <span class="fake-photo-text">点击查看</span>
+                    <span class="fake-photo-text">点击查看照片</span>
                 `;
 
                 attachMessageEvents(bubble, msg);
