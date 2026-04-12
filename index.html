@@ -20510,13 +20510,13 @@ ${historyText}`;
                         const content = lines[i].trim();
                         // remove leading numbers if any
                         const cleanContent = content.replace(/^\d+[\.、]\s*/, '');
-                        if (cleanContent) {
-                            const post = {
-                                id: Date.now().toString() + '_' + i,
-                                authorName: generateRealisticNetName(),
-                                authorAvatar: 'https://q1.qlogo.cn/g?b=qq&nk=' + (Math.floor(Math.random() * 2900000000) + 100000000) + '&s=100',
-                                content: cleanContent,
-                                timestamp: Date.now() - i * 1000, // Slightly offset so they order properly
+                            if (cleanContent) {
+                                const post = {
+                                    id: Date.now().toString() + '_' + i,
+                                    authorName: generateRealisticNetName(),
+                                    authorAvatar: tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)],
+                                    content: cleanContent,
+                                    timestamp: Date.now() - i * 1000, // Slightly offset so they order properly
                                 isRolePost: false,
                                 reposts: Math.floor(Math.random() * 50) + 1,
                                 comments: Math.floor(Math.random() * 100) + 10,
@@ -20574,11 +20574,10 @@ ${historyText}`;
                         dbUpdate('tieba_posts', post);
                     }
 
-                    const randomColor = tiebaColors[Math.floor(Math.random() * tiebaColors.length)];
                     card.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <div style="width: 36px; height: 36px; border-radius: 50%; background-color: ${randomColor};"></div>
+                                <img src="${post.authorAvatar || tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)]}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">
                                 <div>
                                     <div style="font-size: 15px; font-weight: 500; color: #333;">${post.authorName}</div>
                                     <div style="font-size: 12px; color: #999;">${timeStr}</div>
@@ -20630,11 +20629,10 @@ ${historyText}`;
                 const timeStr = `${postDate.getMonth()+1}-${postDate.getDate()} ${String(postDate.getHours()).padStart(2, '0')}:${String(postDate.getMinutes()).padStart(2, '0')}`;
 
                 const container = document.getElementById('tieba-detail-post-container');
-                const randomColor = tiebaColors[Math.floor(Math.random() * tiebaColors.length)];
                 container.innerHTML = `
                     <div style="background: white; padding: 15px;">
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <div style="width: 36px; height: 36px; border-radius: 50%; background-color: ${randomColor};"></div>
+                            <img src="${post.authorAvatar || tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)]}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">
                             <div>
                                 <div style="font-size: 15px; font-weight: 500; color: #333;">${post.authorName}</div>
                                 <div style="font-size: 12px; color: #999;">${timeStr}</div>
@@ -20682,10 +20680,9 @@ ${historyText}`;
                     const commentsCount = comment.comments || 0;
                     const likes = comment.likes || 0;
                     const isLiked = comment.isLiked || false;
-                    const randomColor = tiebaColors[Math.floor(Math.random() * tiebaColors.length)];
 
                     commentEl.innerHTML = `
-                        <div style="width: 36px; height: 36px; border-radius: 50%; background-color: ${randomColor}; flex-shrink: 0; margin-top: 2px;"></div>
+                        <img src="${comment.avatar || tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)]}" style="width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; margin-top: 2px; object-fit: cover;">
                         <div style="flex: 1; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
                                 <div style="display: flex; flex-direction: column;">
@@ -20795,7 +20792,7 @@ ${post.content}
                             currentPost.tiebaComments.push({
                                 id: Date.now().toString() + '_' + i,
                                 name: generateRealisticNetName(),
-                                avatar: 'https://q1.qlogo.cn/g?b=qq&nk=' + (Math.floor(Math.random() * 2900000000) + 100000000) + '&s=100',
+                                avatar: tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)],
                                 content: content,
                                 timestamp: Date.now() + i,
                                 reposts: Math.floor(Math.random() * 5),
@@ -20958,6 +20955,72 @@ ${post.content}
         });
         observer.observe(document.body, { childList: true, subtree: true });
     });
+
+    const tiebaAvatars = [
+        'https://img.heliar.top/file/1775975067221_微信图片_20260412141546_855_12.jpg',
+        'https://img.heliar.top/file/1775975050764_微信图片_20260412141545_854_12.png',
+        'https://img.heliar.top/file/1775975047277_微信图片_20260412141544_853_12.jpg',
+        'https://img.heliar.top/file/1775975044854_微信图片_20260412141543_852_12.jpg',
+        'https://img.heliar.top/file/1775975040647_微信图片_20260412141542_851_12.jpg',
+        'https://img.heliar.top/file/1775975038871_微信图片_20260412141541_850_12.jpg',
+        'https://img.heliar.top/file/1775975035385_微信图片_20260412141540_849_12.jpg',
+        'https://img.heliar.top/file/1775975027350_微信图片_20260412141539_848_12.jpg',
+        'https://img.heliar.top/file/1775975033130_微信图片_20260412141538_847_12.jpg',
+        'https://img.heliar.top/file/1775975029471_微信图片_20260412141537_846_12.jpg',
+        'https://img.heliar.top/file/1775975019891_微信图片_20260412141536_845_12.jpg',
+        'https://img.heliar.top/file/1775975026529_微信图片_20260412141534_844_12.jpg',
+        'https://img.heliar.top/file/1775975020658_微信图片_20260412141533_843_12.jpg',
+        'https://img.heliar.top/file/1775975012558_微信图片_20260412141532_842_12.jpg',
+        'https://img.heliar.top/file/1775975020605_微信图片_20260412141531_841_12.jpg',
+        'https://img.heliar.top/file/1775975013512_微信图片_20260412141530_840_12.jpg',
+        'https://img.heliar.top/file/1775975016600_微信图片_20260412141529_839_12.png',
+        'https://img.heliar.top/file/1775975011876_微信图片_20260412141528_838_12.jpg',
+        'https://img.heliar.top/file/1775975012442_微信图片_20260412141527_837_12.jpg',
+        'https://img.heliar.top/file/1775975005096_微信图片_20260412141525_836_12.jpg',
+        'https://img.heliar.top/file/1775975005587_微信图片_20260412141524_835_12.jpg',
+        'https://img.heliar.top/file/1775974975347_微信图片_20260412141523_834_12.jpg',
+        'https://img.heliar.top/file/1775974976057_微信图片_20260412141522_833_12.jpg',
+        'https://img.heliar.top/file/1775974978198_微信图片_20260412141521_832_12.jpg',
+        'https://img.heliar.top/file/1775974975196_微信图片_20260412141520_831_12.jpg',
+        'https://img.heliar.top/file/1775974972465_微信图片_20260412141519_830_12.jpg',
+        'https://img.heliar.top/file/1775974969734_微信图片_20260412141518_829_12.jpg',
+        'https://img.heliar.top/file/1775974967506_微信图片_20260412141517_828_12.jpg',
+        'https://img.heliar.top/file/1775974964086_微信图片_20260412141516_827_12.jpg',
+        'https://img.heliar.top/file/1775974964069_微信图片_20260412141515_826_12.jpg',
+        'https://img.heliar.top/file/1775974962867_微信图片_20260412141514_825_12.jpg',
+        'https://img.heliar.top/file/1775974957397_微信图片_20260412141513_824_12.jpg',
+        'https://img.heliar.top/file/1775974962178_微信图片_20260412141511_823_12.jpg',
+        'https://img.heliar.top/file/1775974954891_微信图片_20260412141510_822_12.jpg',
+        'https://img.heliar.top/file/1775974952619_微信图片_20260412141509_821_12.jpg',
+        'https://img.heliar.top/file/1775974949501_微信图片_20260412141508_820_12.jpg',
+        'https://img.heliar.top/file/1775974954012_微信图片_20260412141507_819_12.png',
+        'https://img.heliar.top/file/1775974952355_微信图片_20260412141506_818_12.jpg',
+        'https://img.heliar.top/file/1775974946287_微信图片_20260412141505_817_12.jpg',
+        'https://img.heliar.top/file/1775974947399_微信图片_20260412141504_816_12.jpg',
+        'https://img.heliar.top/file/1775974943309_微信图片_20260412141503_815_12.jpg',
+        'https://img.heliar.top/file/1775974915705_微信图片_20260412141502_814_12.jpg',
+        'https://img.heliar.top/file/1775974921221_微信图片_20260412141501_813_12.jpg',
+        'https://img.heliar.top/file/1775974917946_微信图片_20260412141500_812_12.png',
+        'https://img.heliar.top/file/1775974913326_微信图片_20260412141459_811_12.png',
+        'https://img.heliar.top/file/1775974912070_微信图片_20260412141458_810_12.jpg',
+        'https://img.heliar.top/file/1775974906201_微信图片_20260412141457_809_12.png',
+        'https://img.heliar.top/file/1775974911798_微信图片_20260412141456_808_12.jpg',
+        'https://img.heliar.top/file/1775974909927_微信图片_20260412141455_807_12.png',
+        'https://img.heliar.top/file/1775974905117_微信图片_20260412141454_806_12.png',
+        'https://img.heliar.top/file/1775974898571_微信图片_20260412141453_805_12.png',
+        'https://img.heliar.top/file/1775974899285_微信图片_20260412141452_804_12.png',
+        'https://img.heliar.top/file/1775974901171_微信图片_20260412141451_803_12.jpg',
+        'https://img.heliar.top/file/1775974899496_微信图片_20260412141450_802_12.jpg',
+        'https://img.heliar.top/file/1775974890548_微信图片_20260412141448_801_12.jpg',
+        'https://img.heliar.top/file/1775974892604_微信图片_20260412141447_800_12.jpg',
+        'https://img.heliar.top/file/1775974889784_微信图片_20260412141446_799_12.jpg',
+        'https://img.heliar.top/file/1775974890828_微信图片_20260412141445_798_12.jpg',
+        'https://img.heliar.top/file/1775974883365_微信图片_20260412141444_797_12.jpg',
+        'https://img.heliar.top/file/1775974879895_微信图片_20260412141443_796_12.jpg',
+        'https://img.heliar.top/file/1775974886049_微信图片_20260412141441_795_12.jpg',
+        'https://img.heliar.top/file/1775974884317_微信图片_20260412141440_794_12.jpg',
+        'https://img.heliar.top/file/1775974879251_微信图片_20260412141439_793_12.jpg'
+    ];
 
     const tiebaColors = [
         '#fec5ce', '#f8819b', '#734025', '#dc9942', '#deb075', '#f8c8c6', '#8b7069',
