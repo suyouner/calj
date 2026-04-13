@@ -3836,21 +3836,23 @@
         .offline-thought-bubble {
             background-color: #fff !important;
             border: 2px solid #ddd !important;
-            border-radius: 30px !important;
-            padding: 12px 16px !important;
-            box-shadow: 2px 4px 12px rgba(0,0,0,0.05) !important;
+            border-radius: 20px !important;
+            padding: 10px 14px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
             position: relative;
             color: #555 !important;
             font-style: italic;
+            margin-left: 14px;
+            margin-top: 4px;
         }
         
         .offline-thought-bubble::after {
             content: '';
             position: absolute;
-            bottom: -10px;
-            left: 20px;
-            width: 10px;
-            height: 10px;
+            top: 12px;
+            left: -12px;
+            width: 8px;
+            height: 8px;
             background-color: #fff;
             border: 2px solid #ddd;
             border-radius: 50%;
@@ -3859,10 +3861,10 @@
         .offline-thought-bubble::before {
             content: '';
             position: absolute;
-            bottom: -18px;
-            left: 12px;
-            width: 6px;
-            height: 6px;
+            top: 18px;
+            left: -20px;
+            width: 4px;
+            height: 4px;
             background-color: #fff;
             border: 2px solid #ddd;
             border-radius: 50%;
@@ -18478,6 +18480,10 @@ ${historyText}`;
                 bubbleContainer.appendChild(avatar);
                 row.appendChild(bubbleContainer);
                 
+                container.appendChild(row);
+                if (shouldScroll) {
+                    container.scrollTop = container.scrollHeight;
+                }
             } else {
                 const parsedSegments = parseOfflineMessage(msg.text);
                 container.appendChild(row);
