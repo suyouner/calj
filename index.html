@@ -9407,9 +9407,20 @@
         }
 
         function deleteDiscoverPost(postId) {
-            showCustomConfirm('确定要删除这条动态吗？', () => {
+            const messageHtml = `
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <span style="margin-bottom: 15px;">确定要删除这条动态吗？</span>
+                    <label class="gm-contact-item" style="justify-content: center;">
+                        <input type="checkbox" id="secret-delete-checkbox">
+                        <div class="round-checkbox"><div class="inner-dot"></div></div>
+                        <span>偷偷删除</span>
+                    </label>
+                </div>
+            `;
+            showCustomConfirm(messageHtml, () => {
+                const isSecretDelete = document.getElementById('secret-delete-checkbox')?.checked;
                 dbGet('discover_posts', postId, post => {
-                    if (post) {
+                    if (post && !isSecretDelete) {
                         notifyBotsOfDeletion(post);
                     }
                     dbDelete('discover_posts', postId, () => {
