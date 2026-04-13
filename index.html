@@ -21366,14 +21366,30 @@ ${post.content}
                     
                     if (!currentPost.tiebaComments) currentPost.tiebaComments = [];
 
+                    const usedAvatars = new Set();
+                    if (currentPost.authorAvatar) {
+                        usedAvatars.add(currentPost.authorAvatar);
+                    }
+                    currentPost.tiebaComments.forEach(c => {
+                        if (c.avatar) usedAvatars.add(c.avatar);
+                    });
+
                     for (let i = 0; i < lines.length && i < numComments; i++) {
                         let content = lines[i].replace(/^\d+[\.、]\s*/, '').trim();
                         if (content) {
                             content = content.replace(/^["「『]|["」』]$/g, '').trim();
+                            
+                            let availableAvatars = tiebaAvatars.filter(a => !usedAvatars.has(a));
+                            if (availableAvatars.length === 0) {
+                                availableAvatars = tiebaAvatars; // Fallback if all used
+                            }
+                            const selectedAvatar = availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
+                            usedAvatars.add(selectedAvatar);
+
                             currentPost.tiebaComments.push({
                                 id: Date.now().toString() + '_' + i,
                                 name: generateRealisticNetName(),
-                                avatar: tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)],
+                                avatar: selectedAvatar,
                                 content: content,
                                 timestamp: Date.now() + i,
                                 reposts: Math.floor(Math.random() * 5),
