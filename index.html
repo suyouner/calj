@@ -21552,6 +21552,7 @@ ${post.content}
                         }
                         
                         dbUpdate('tieba_posts', post, () => {
+                            const isReplyToComment = !!currentTiebaReplyCommentId;
                             input.value = '';
                             input.placeholder = '发评论...';
                             currentTiebaReplyCommentId = null;
@@ -21560,7 +21561,7 @@ ${post.content}
                             renderTiebaCommentsList(post);
                             const page = document.getElementById('tieba-post-detail-page');
                             const contentArea = page.querySelector('.tieba-content');
-                            if (contentArea && !currentTiebaReplyCommentId) {
+                            if (contentArea && !isReplyToComment) {
                                 setTimeout(() => {
                                     contentArea.scrollTop = contentArea.scrollHeight;
                                 }, 50);
