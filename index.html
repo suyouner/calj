@@ -21261,6 +21261,15 @@ ${historyText}`;
                     const commentsCount = comment.comments || 0;
                     const likes = comment.likes || 0;
                     const isLiked = comment.isLiked || false;
+                    
+                    let subCommentsHtml = '';
+                    if (comment.subComments && comment.subComments.length > 0) {
+                        subCommentsHtml = '<div style="background-color: #f7f7f7; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 14px; color: #333;">';
+                        comment.subComments.forEach(sub => {
+                            subCommentsHtml += `<div style="margin-bottom: 4px; line-height: 1.5;"><span style="color: #eb7350; font-weight: 500; cursor: pointer;">${sub.name}</span>：${sub.content}</div>`;
+                        });
+                        subCommentsHtml += '</div>';
+                    }
 
                     commentEl.innerHTML = `
                         <img src="${comment.avatar || tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)]}" style="width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; margin-top: 2px; object-fit: cover;">
@@ -21272,7 +21281,8 @@ ${historyText}`;
                                 </div>
                                 <div style="color: #999; font-size: 16px; font-weight: bold; line-height: 1; cursor: pointer; padding: 0 5px;" onclick="deleteTiebaComment('${post.id}', '${comment.id}')">...</div>
                             </div>
-                            <div style="font-size: 15px; color: #333; line-height: 1.5; margin-bottom: 10px; word-wrap: break-word; white-space: pre-wrap;">${comment.content}</div>
+                            <div style="font-size: 15px; color: #333; line-height: 1.6; margin-bottom: 10px; word-wrap: break-word; white-space: pre-wrap;">${comment.content}</div>
+                            ${subCommentsHtml}
                             <div style="display: flex; justify-content: space-between; color: #999; font-size: 12px; padding-right: 20px;">
                                 <div style="display: flex; align-items: center; gap: 4px;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"></polyline><path d="M4 4v7a4 4 0 0 0 4 4h12"></path></svg>
@@ -21346,23 +21356,48 @@ ${historyText}`;
 
             const numComments = Math.floor(Math.random() * (15 - 8 + 1)) + 8; // 8 to 15
 
-            let prompt = `你现在需要扮演${numComments}个不同的网络论坛/贴吧用户，对以下这篇帖子发表评论。
+            let prompt = `你现在需要扮演不同的网络论坛/微博用户，对以下这篇帖子发表评论。
 【原帖内容】：
 ${post.content}
 
 【要求】：
-1. 请生成恰好 ${numComments} 条不同的网友评论，每条评论占一行，用换行符分隔。不要带有任何编号、发帖人名字或多余解释。
+1. 请生成恰好 ${numComments} 条主评论。为了显得真实，其中约一半的主评论需要包含 1 到 2 条其他网友的楼中楼回复。
 2. 语气要符合真实的网民，可以有赞同、反对、吐槽、玩梗、抖机灵、围观等各种态度，尽量丰富多样。
-3. 每条评论长度在 5 到 50 字之间。
-4. 只输出评论内容文本，不输出任何其他东西。`;
+3. 每条评论和回复的长度在 5 到 50 字之间。
+4. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
+[
+  {
+    "content": "主评论内容1",
+    "subComments": [
+      {"content": "楼中楼回复1"}
+    ]
+  },
+  {
+    "content": "主评论内容2",
+    "subComments": []
+  }
+]`;
 
             try {
-                let aiResponseText = await callLLM(config, prompt, []);
+                let aiResponseText = await callLLM(config, prompt, [{ type: 'sent', text: "请严格输出合法 JSON 格式的内容。" }]);
                 if (aiResponseText) {
                     const currentPost = await new Promise(res => dbGet('tieba_posts', post.id, res));
                     if (!currentPost) return;
 
-                    const lines = aiResponseText.split('\n').filter(l => l.trim() !== '');
+                    let jsonStr = aiResponseText.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+                    const startIdx = jsonStr.indexOf('[');
+                    const endIdx = jsonStr.lastIndexOf(']');
+                    if (startIdx !== -1 && endIdx !== -1) {
+                        jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+                    }
+                    
+                    let commentsData = [];
+                    try {
+                        commentsData = JSON.parse(jsonStr);
+                    } catch (e) {
+                        console.error('Failed to parse JSON comments', e);
+                        return;
+                    }
                     
                     if (!currentPost.tiebaComments) currentPost.tiebaComments = [];
 
@@ -21374,11 +21409,10 @@ ${post.content}
                         if (c.avatar) usedAvatars.add(c.avatar);
                     });
 
-                    for (let i = 0; i < lines.length && i < numComments; i++) {
-                        let content = lines[i].replace(/^\d+[\.、]\s*/, '').trim();
+                    for (let i = 0; i < commentsData.length && i < numComments; i++) {
+                        let item = commentsData[i];
+                        let content = (item.content || '').trim();
                         if (content) {
-                            content = content.replace(/^["「『]|["」』]$/g, '').trim();
-                            
                             let availableAvatars = tiebaAvatars.filter(a => !usedAvatars.has(a));
                             if (availableAvatars.length === 0) {
                                 availableAvatars = tiebaAvatars; // Fallback if all used
@@ -21386,14 +21420,27 @@ ${post.content}
                             const selectedAvatar = availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
                             usedAvatars.add(selectedAvatar);
 
+                            const subComments = [];
+                            if (item.subComments && item.subComments.length > 0) {
+                                item.subComments.forEach(sub => {
+                                    if (sub.content) {
+                                        subComments.push({
+                                            name: sub.name || generateRealisticNetName(),
+                                            content: sub.content.trim()
+                                        });
+                                    }
+                                });
+                            }
+
                             currentPost.tiebaComments.push({
                                 id: Date.now().toString() + '_' + i,
                                 name: generateRealisticNetName(),
                                 avatar: selectedAvatar,
                                 content: content,
+                                subComments: subComments,
                                 timestamp: Date.now() + i,
                                 reposts: Math.floor(Math.random() * 5),
-                                comments: Math.floor(Math.random() * 10),
+                                comments: subComments.length + Math.floor(Math.random() * 5),
                                 likes: Math.floor(Math.random() * 50)
                             });
                         }
