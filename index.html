@@ -21266,7 +21266,11 @@ ${historyText}`;
                     if (comment.subComments && comment.subComments.length > 0) {
                         subCommentsHtml = '<div style="background-color: #f7f7f7; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 14px; color: #333;">';
                         comment.subComments.forEach(sub => {
-                            subCommentsHtml += `<div style="margin-bottom: 4px; line-height: 1.5;"><span style="color: #eb7350; font-weight: 500; cursor: pointer;">${sub.name}</span>：${sub.content}</div>`;
+                            if (sub.replyTo) {
+                                subCommentsHtml += `<div style="margin-bottom: 4px; line-height: 1.5;"><span style="color: #eb7350; font-weight: 500; cursor: pointer;">${sub.name}</span> 回复 <span style="color: #eb7350; font-weight: 500; cursor: pointer;">${sub.replyTo}</span>：${sub.content}</div>`;
+                            } else {
+                                subCommentsHtml += `<div style="margin-bottom: 4px; line-height: 1.5;"><span style="color: #eb7350; font-weight: 500; cursor: pointer;">${sub.name}</span>：${sub.content}</div>`;
+                            }
                         });
                         subCommentsHtml += '</div>';
                     }
@@ -21364,17 +21368,15 @@ ${post.content}
 1. 请生成恰好 ${numComments} 条主评论。为了显得真实，其中约一半的主评论需要包含 1 到 2 条其他网友的楼中楼回复。
 2. 语气要符合真实的网民，可以有赞同、反对、吐槽、玩梗、抖机灵、围观等各种态度，尽量丰富多样。
 3. 每条评论和回复的长度在 5 到 50 字之间。
-4. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
+4. 在楼中楼回复（subComments）中，除了直接回复层主，也可以有网友之间的互相回复。如果是互相回复，请使用 "replyTo" 字段指明被回复者的 "name"；如果是直接回复层主，则不需要 "replyTo" 字段。
+5. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
 [
   {
     "content": "主评论内容1",
     "subComments": [
-      {"content": "楼中楼回复1"}
+      {"name": "路人甲", "content": "楼中楼回复1"},
+      {"name": "吃瓜群众", "replyTo": "路人甲", "content": "确实是这样"}
     ]
-  },
-  {
-    "content": "主评论内容2",
-    "subComments": []
   }
 ]`;
 
@@ -21426,7 +21428,8 @@ ${post.content}
                                     if (sub.content) {
                                         subComments.push({
                                             name: sub.name || generateRealisticNetName(),
-                                            content: sub.content.trim()
+                                            content: sub.content.trim(),
+                                            replyTo: sub.replyTo || null
                                         });
                                     }
                                 });
