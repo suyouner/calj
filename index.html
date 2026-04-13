@@ -9426,7 +9426,7 @@
                 </div>
             `;
             showCustomConfirm(messageHtml, () => {
-                const deleteModeInput = document.querySelector(\`input[name="delete_mode_\${postId}"]:checked\`);
+                const deleteModeInput = document.querySelector(`input[name="delete_mode_${postId}"]:checked`);
                 const deleteMode = deleteModeInput ? deleteModeInput.value : 'stealth';
                 dbGet('discover_posts', postId, post => {
                     if (post && deleteMode === 'notify') {
