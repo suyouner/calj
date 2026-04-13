@@ -1280,8 +1280,7 @@
             gap: 10px;
         }
         .gm-contact-item { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .gm-contact-item input[type="checkbox"],
-        .gm-contact-item input[type="radio"] { display: none; }
+        .gm-contact-item input[type="checkbox"] { display: none; }
         .gm-contact-item .round-checkbox {
             width: 20px;
             height: 20px;
@@ -1301,12 +1300,10 @@
             transform: scale(0);
             transition: transform 0.2s;
         }
-        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox,
-        .gm-contact-item input[type="radio"]:checked + .round-checkbox {
+        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox {
             border-color: #333;
         }
-        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox .inner-dot,
-        .gm-contact-item input[type="radio"]:checked + .round-checkbox .inner-dot {
+        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox .inner-dot {
             transform: scale(1);
         }
         .gm-contact-item span { font-size: 14px; color: #333; }
@@ -1454,7 +1451,7 @@
             color: #000;
             margin-bottom: 10px;
         }
-        #custom-confirm-modal .confirm-modal-content #custom-confirm-message {
+        #custom-confirm-modal .confirm-modal-content p {
             font-size: 14px;
             color: #333;
             margin-bottom: 25px;
@@ -6083,7 +6080,7 @@
     <div class="confirm-modal-overlay" id="custom-confirm-modal">
         <div class="confirm-modal-content">
             <h3 id="custom-confirm-title">确认操作</h3>
-            <div id="custom-confirm-message">你确定要执行此操作吗？</div>
+            <p id="custom-confirm-message">你确定要执行此操作吗？</p>
             <div class="confirm-modal-actions">
                 <button class="cancel-btn" id="custom-confirm-cancel-btn">取消</button>
                 <button class="confirm-btn" id="custom-confirm-confirm-btn">确定</button>
@@ -9410,26 +9407,9 @@
         }
 
         function deleteDiscoverPost(postId) {
-            const messageHtml = `
-                <div style="margin-bottom: 15px;">确定要删除这条动态吗？</div>
-                <div style="display: flex; flex-direction: column; gap: 10px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 8px;">
-                    <label class="gm-contact-item" style="padding: 5px 0;">
-                        <input type="radio" name="delete_mode_${postId}" value="stealth" checked>
-                        <div class="round-checkbox"><div class="inner-dot"></div></div>
-                        <span style="font-size: 14px; color: #333;">偷偷删除（不通知角色）</span>
-                    </label>
-                    <label class="gm-contact-item" style="padding: 5px 0;">
-                        <input type="radio" name="delete_mode_${postId}" value="notify">
-                        <div class="round-checkbox"><div class="inner-dot"></div></div>
-                        <span style="font-size: 14px; color: #333;">通知删除（角色会知道）</span>
-                    </label>
-                </div>
-            `;
-            showCustomConfirm(messageHtml, () => {
-                const deleteModeInput = document.querySelector(`input[name="delete_mode_${postId}"]:checked`);
-                const deleteMode = deleteModeInput ? deleteModeInput.value : 'stealth';
+            showCustomConfirm('确定要删除这条动态吗？', () => {
                 dbGet('discover_posts', postId, post => {
-                    if (post && deleteMode === 'notify') {
+                    if (post) {
                         notifyBotsOfDeletion(post);
                     }
                     dbDelete('discover_posts', postId, () => {
@@ -21621,6 +21601,9 @@ ${post.content}
         '#e3cfb4'
     ];
 
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
