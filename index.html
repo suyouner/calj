@@ -3833,6 +3833,41 @@
             border-bottom-right-radius: 5px;
         }
 
+        .offline-thought-bubble {
+            background-color: #fff !important;
+            border: 2px solid #ddd !important;
+            border-radius: 30px !important;
+            padding: 12px 16px !important;
+            box-shadow: 2px 4px 12px rgba(0,0,0,0.05) !important;
+            position: relative;
+            color: #555 !important;
+            font-style: italic;
+        }
+        
+        .offline-thought-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 20px;
+            width: 10px;
+            height: 10px;
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 50%;
+        }
+        
+        .offline-thought-bubble::before {
+            content: '';
+            position: absolute;
+            bottom: -18px;
+            left: 12px;
+            width: 6px;
+            height: 6px;
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 50%;
+        }
+
         .offline-action {
             text-align: center;
             font-size: 14px;
@@ -18493,11 +18528,6 @@ ${historyText}`;
                         avatar.className = 'offline-avatar';
                         avatar.src = msg.senderAvatar || friend.avatar;
                         
-                        avatar.onclick = (e) => {
-                            e.stopPropagation();
-                            handleAvatarClick(msg.friendId);
-                        };
-                        
                         const bubble = document.createElement('div');
                         bubble.className = 'offline-bubble left';
                         bubble.innerHTML = seg.content.replace(/\n/g, '<br>');
@@ -18533,14 +18563,9 @@ ${historyText}`;
                             avatar.className = 'offline-avatar';
                             avatar.src = msg.senderAvatar || friend.avatar;
                             
-                            avatar.onclick = (e) => {
-                                e.stopPropagation();
-                                handleAvatarClick(msg.friendId);
-                            };
-                            
                             const bubble = document.createElement('div');
-                            bubble.className = 'offline-bubble left';
-                            bubble.innerHTML = `<span class="message-thought">${seg.content.replace(/\n/g, '<br>')}</span>`;
+                            bubble.className = 'offline-bubble left offline-thought-bubble';
+                            bubble.innerHTML = seg.content.replace(/\n/g, '<br>');
 
                             attachMessageEvents(bubble, msg, segmentInfo);
                             
@@ -18574,18 +18599,9 @@ ${historyText}`;
                     avatar.className = 'offline-avatar';
                     avatar.src = msg.senderAvatar || friend.avatar;
                     
-                    avatar.onclick = (e) => {
-                        e.stopPropagation();
-                        handleAvatarClick(msg.friendId);
-                    };
-                    
                     const bubble = document.createElement('div');
-                    bubble.className = 'offline-bubble left';
+                    bubble.className = 'offline-bubble left offline-thought-bubble';
                     bubble.innerHTML = '...';
-                    bubble.style.color = '#ccc';
-                    bubble.style.backgroundColor = 'transparent';
-                    bubble.style.border = 'none';
-                    bubble.style.padding = '12px 0';
                     
                     attachMessageEvents(bubble, msg, { index: 0, type: 'thought', content: currentThoughts[0] });
                     
