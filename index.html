@@ -21424,12 +21424,33 @@ ${post.content}
 
                             const subComments = [];
                             if (item.subComments && item.subComments.length > 0) {
+                                const nameMap = {};
                                 item.subComments.forEach(sub => {
                                     if (sub.content) {
+                                        let aiName = sub.name;
+                                        let realName;
+                                        if (aiName && nameMap[aiName]) {
+                                            realName = nameMap[aiName];
+                                        } else {
+                                            realName = generateRealisticNetName();
+                                            if (aiName) nameMap[aiName] = realName;
+                                        }
+
+                                        let replyToRealName = null;
+                                        if (sub.replyTo) {
+                                            if (nameMap[sub.replyTo]) {
+                                                replyToRealName = nameMap[sub.replyTo];
+                                            } else {
+                                                const newReplyToName = generateRealisticNetName();
+                                                nameMap[sub.replyTo] = newReplyToName;
+                                                replyToRealName = newReplyToName;
+                                            }
+                                        }
+
                                         subComments.push({
-                                            name: sub.name || generateRealisticNetName(),
+                                            name: realName,
                                             content: sub.content.trim(),
-                                            replyTo: sub.replyTo || null
+                                            replyTo: replyToRealName
                                         });
                                     }
                                 });
