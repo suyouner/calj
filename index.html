@@ -1280,7 +1280,8 @@
             gap: 10px;
         }
         .gm-contact-item { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .gm-contact-item input[type="checkbox"] { display: none; }
+        .gm-contact-item input[type="checkbox"],
+        .gm-contact-item input[type="radio"] { display: none; }
         .gm-contact-item .round-checkbox {
             width: 20px;
             height: 20px;
@@ -1300,10 +1301,12 @@
             transform: scale(0);
             transition: transform 0.2s;
         }
-        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox {
+        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox,
+        .gm-contact-item input[type="radio"]:checked + .round-checkbox {
             border-color: #333;
         }
-        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox .inner-dot {
+        .gm-contact-item input[type="checkbox"]:checked + .round-checkbox .inner-dot,
+        .gm-contact-item input[type="radio"]:checked + .round-checkbox .inner-dot {
             transform: scale(1);
         }
         .gm-contact-item span { font-size: 14px; color: #333; }
@@ -9410,18 +9413,20 @@
             const messageHtml = `
                 <div style="margin-bottom: 15px;">确定要删除这条动态吗？</div>
                 <div style="display: flex; flex-direction: column; gap: 10px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 8px;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="radio" name="delete_mode" value="stealth" checked style="width: 16px; height: 16px; margin: 0;">
-                        <span>偷偷删除（不通知角色）</span>
+                    <label class="gm-contact-item" style="padding: 5px 0;">
+                        <input type="radio" name="delete_mode_${postId}" value="stealth" checked>
+                        <div class="round-checkbox"><div class="inner-dot"></div></div>
+                        <span style="font-size: 14px; color: #333;">偷偷删除（不通知角色）</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="radio" name="delete_mode" value="notify" style="width: 16px; height: 16px; margin: 0;">
-                        <span>通知删除（角色会知道）</span>
+                    <label class="gm-contact-item" style="padding: 5px 0;">
+                        <input type="radio" name="delete_mode_${postId}" value="notify">
+                        <div class="round-checkbox"><div class="inner-dot"></div></div>
+                        <span style="font-size: 14px; color: #333;">通知删除（角色会知道）</span>
                     </label>
                 </div>
             `;
             showCustomConfirm(messageHtml, () => {
-                const deleteModeInput = document.querySelector('input[name="delete_mode"]:checked');
+                const deleteModeInput = document.querySelector(\`input[name="delete_mode_\${postId}"]:checked\`);
                 const deleteMode = deleteModeInput ? deleteModeInput.value : 'stealth';
                 dbGet('discover_posts', postId, post => {
                     if (post && deleteMode === 'notify') {
