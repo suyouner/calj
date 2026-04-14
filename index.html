@@ -21566,10 +21566,192 @@ ${post.content}
                                     contentArea.scrollTop = contentArea.scrollHeight;
                                 }, 50);
                             }
+                            
+                            generateTiebaAIReplies(post.id);
                         });
                     }
                 });
             });
+        }
+
+        async function generateTiebaAIReplies(postId) {
+            const configStr = localStorage.getItem('globalConfig');
+            if (!configStr) return;
+            const config = JSON.parse(configStr);
+            if (!config.apiKey || !config.model) return;
+
+            const post = await new Promise(res => dbGet('tieba_posts', postId, res));
+            if (!post) return;
+
+            const loadingEl = document.getElementById('tieba-detail-comments-loading');
+            if (loadingEl) loadingEl.style.display = 'block';
+
+            let commentsContext = '';
+            if (post.tiebaComments && post.tiebaComments.length > 0) {
+                const recentComments = post.tiebaComments.slice(-10);
+                recentComments.forEach(c => {
+                    commentsContext += `[评论ID: ${c.id}] 层主 ${c.name}: ${c.content}\n`;
+                    if (c.subComments && c.subComments.length > 0) {
+                        c.subComments.forEach(sub => {
+                            let replyStr = sub.replyTo ? ` 回复 ${sub.replyTo}` : '';
+                            commentsContext += `  - 楼中楼: ${sub.name}${replyStr}: ${sub.content}\n`;
+                        });
+                    }
+                });
+            }
+
+            let prompt = \`你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“我”的最新发言进行回复或围观）。
+【原帖内容】：
+\${post.content}
+
+【最近的评论区状态】：
+\${commentsContext}
+
+【要求】：
+1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。
+2. 语气要符合真实的网民，可以有赞同、反对、吐槽、玩梗等。
+3. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
+[
+  {
+    "action": "new_main",
+    "content": "主评论内容",
+    "subComments": [
+      {"name": "吃瓜群众", "replyTo": "你的名字", "content": "确实是这样"}
+    ]
+  },
+  {
+    "action": "reply_sub",
+    "targetCommentId": "要回复的主评论的ID（从上面上下文获取）",
+    "replyTo": "被回复者的名字（例如刚才说话的'我'）",
+    "content": "楼中楼回复内容"
+  }
+]\`;
+
+            try {
+                let aiResponseText = await callLLM(config, prompt, [{ type: 'sent', text: "请严格输出合法 JSON 格式的内容。" }]);
+                if (aiResponseText) {
+                    const currentPost = await new Promise(res => dbGet('tieba_posts', postId, res));
+                    if (!currentPost) return;
+
+                    let jsonStr = aiResponseText.replace(/\\\`\\\`\\\`json/g, '').replace(/\\\`\\\`\\\`/g, '').trim();
+                    const startIdx = jsonStr.indexOf('[');
+                    const endIdx = jsonStr.lastIndexOf(']');
+                    if (startIdx !== -1 && endIdx !== -1) {
+                        jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+                    }
+                    
+                    let actions = [];
+                    try {
+                        actions = JSON.parse(jsonStr);
+                    } catch (e) {
+                        console.error('Failed to parse JSON replies', e);
+                        return;
+                    }
+                    
+                    if (!currentPost.tiebaComments) currentPost.tiebaComments = [];
+
+                    const usedAvatars = new Set();
+                    if (currentPost.authorAvatar) usedAvatars.add(currentPost.authorAvatar);
+                    currentPost.tiebaComments.forEach(c => {
+                        if (c.avatar) usedAvatars.add(c.avatar);
+                    });
+
+                    const nameMap = {};
+
+                    for (let i = 0; i < actions.length; i++) {
+                        let act = actions[i];
+                        if (act.action === 'new_main') {
+                            let content = (act.content || '').trim();
+                            if (content) {
+                                let availableAvatars = tiebaAvatars.filter(a => !usedAvatars.has(a));
+                                if (availableAvatars.length === 0) availableAvatars = tiebaAvatars;
+                                const selectedAvatar = availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
+                                usedAvatars.add(selectedAvatar);
+
+                                const subComments = [];
+                                if (act.subComments && act.subComments.length > 0) {
+                                    act.subComments.forEach(sub => {
+                                        if (sub.content) {
+                                            let aiName = sub.name;
+                                            let realName = aiName && nameMap[aiName] ? nameMap[aiName] : generateRealisticNetName();
+                                            if (aiName) nameMap[aiName] = realName;
+
+                                            let replyToRealName = null;
+                                            if (sub.replyTo) {
+                                                if (sub.replyTo === '我') {
+                                                    replyToRealName = '我';
+                                                } else if (nameMap[sub.replyTo]) {
+                                                    replyToRealName = nameMap[sub.replyTo];
+                                                } else {
+                                                    const newReplyToName = generateRealisticNetName();
+                                                    nameMap[sub.replyTo] = newReplyToName;
+                                                    replyToRealName = newReplyToName;
+                                                }
+                                            }
+
+                                            subComments.push({
+                                                name: realName,
+                                                content: sub.content.trim(),
+                                                replyTo: replyToRealName
+                                            });
+                                        }
+                                    });
+                                }
+
+                                currentPost.tiebaComments.push({
+                                    id: Date.now().toString() + '_' + i,
+                                    name: generateRealisticNetName(),
+                                    avatar: selectedAvatar,
+                                    content: content,
+                                    subComments: subComments,
+                                    timestamp: Date.now() + i,
+                                    reposts: Math.floor(Math.random() * 5),
+                                    comments: subComments.length + Math.floor(Math.random() * 5),
+                                    likes: Math.floor(Math.random() * 50)
+                                });
+                                currentPost.comments = (currentPost.comments || 0) + 1;
+                            }
+                        } else if (act.action === 'reply_sub') {
+                            let targetId = act.targetCommentId;
+                            let comment = currentPost.tiebaComments.find(c => String(c.id) === String(targetId));
+                            if (comment && act.content) {
+                                if (!comment.subComments) comment.subComments = [];
+                                let replyToName = act.replyTo;
+                                if (replyToName && nameMap[replyToName]) replyToName = nameMap[replyToName];
+                                else if (replyToName && replyToName !== '我') replyToName = generateRealisticNetName();
+
+                                comment.subComments.push({
+                                    name: generateRealisticNetName(),
+                                    content: act.content.trim(),
+                                    replyTo: replyToName
+                                });
+                                comment.comments = (comment.comments || 0) + 1;
+                                currentPost.comments = (currentPost.comments || 0) + 1;
+                            }
+                        }
+                    }
+                    
+                    await new Promise(res => dbUpdate('tieba_posts', currentPost, res));
+                    
+                    if (currentTiebaPostId === currentPost.id) {
+                        renderTiebaCommentsList(currentPost);
+                        document.getElementById('tieba-detail-comments-num').textContent = currentPost.comments;
+                        const page = document.getElementById('tieba-post-detail-page');
+                        const contentArea = page.querySelector('.tieba-content');
+                        if (contentArea) {
+                            setTimeout(() => {
+                                contentArea.scrollTop = contentArea.scrollHeight;
+                            }, 50);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to generate AI replies', e);
+            } finally {
+                if (loadingEl && currentTiebaPostId === postId) {
+                    loadingEl.style.display = 'none';
+                }
+            }
         }
 
     // 检查并注册 Service Worker
