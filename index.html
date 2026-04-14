@@ -21553,6 +21553,12 @@ ${post.content}
                         
                         dbUpdate('tieba_posts', post, () => {
                             const isReplyToComment = !!currentTiebaReplyCommentId;
+                            
+                            let targetCommentId = currentTiebaReplyCommentId;
+                            if (!targetCommentId && post.tiebaComments && post.tiebaComments.length > 0) {
+                                targetCommentId = post.tiebaComments[post.tiebaComments.length - 1].id;
+                            }
+                            
                             input.value = '';
                             input.placeholder = '发评论...';
                             currentTiebaReplyCommentId = null;
@@ -21567,14 +21573,14 @@ ${post.content}
                                 }, 50);
                             }
                             
-                            generateTiebaAIReplies(post.id);
+                            generateTiebaAIReplies(post.id, targetCommentId);
                         });
                     }
                 });
             });
         }
 
-        async function generateTiebaAIReplies(postId) {
+        async function generateTiebaAIReplies(postId, targetCommentId = null) {
             const configStr = localStorage.getItem('globalConfig');
             if (!configStr) return;
             const config = JSON.parse(configStr);
@@ -21608,7 +21614,7 @@ ${post.content}
 ${commentsContext}
 
 【要求】：
-1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。
+1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。${targetCommentId ? `\n由于刚刚用户发表了新评论，请**强烈偏向于**生成楼中楼回复去互动和回应用户。被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)请填 "我"。` : ''}
 2. 语气要符合真实的网民，可以有赞同、反对、吐槽、玩梗等。
 3. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
 [
@@ -21621,7 +21627,7 @@ ${commentsContext}
   },
   {
     "action": "reply_sub",
-    "targetCommentId": "要回复的主评论的ID（从上面上下文获取）",
+    "targetCommentId": "${targetCommentId || "要回复的主评论的ID（从上面上下文获取）"}",
     "replyTo": "被回复者的名字（例如刚才说话的'我'）",
     "content": "楼中楼回复内容"
   }
