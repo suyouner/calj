@@ -21607,12 +21607,58 @@ ${post.content}
             }
 
             let extraRequirement = '';
+            let jsonExample = '';
             if (targetCommentId) {
                 if (isReplyToSubComment) {
-                    extraRequirement = `\n由于刚刚用户在一条评论的楼中楼里发表了新回复，请**强烈偏向于**生成楼中楼回复去互动和回应用户。被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)必须填 "我"。`;
+                    extraRequirement = `\n【强制要求】：由于刚刚用户在一条评论的楼中楼里发表了新回复，**你本次必须且只能**生成针对该楼层的楼中楼回复(action: "reply_sub")，绝对**不允许**生成新的主评论(action: "new_main")。你要去互动和回应用户，被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)必须填 "我"。`;
+                    jsonExample = `[
+  {
+    "action": "reply_sub",
+    "targetCommentId": "${targetCommentId}",
+    "replyTo": "我",
+    "content": "楼中楼回复内容1"
+  },
+  {
+    "action": "reply_sub",
+    "targetCommentId": "${targetCommentId}",
+    "replyTo": "我",
+    "content": "楼中楼回复内容2"
+  }
+]`;
                 } else {
                     extraRequirement = `\n由于刚刚用户发表了新的一楼（主评论），你可以新建主评论互动，或者去用户的那个新楼层下发表楼中楼围观互动。如果是去用户的那个新楼层发楼中楼，该主评论ID为: ${targetCommentId}，且**不需要**填写replyTo字段（或者填null，因为是直接回复层主）。`;
+                    jsonExample = `[
+  {
+    "action": "new_main",
+    "content": "主评论内容",
+    "subComments": [
+      {"name": "吃瓜群众", "replyTo": "你的名字或null", "content": "确实是这样"}
+    ]
+  },
+  {
+    "action": "reply_sub",
+    "targetCommentId": "${targetCommentId}",
+    "replyTo": "被回复者的名字（例如'我'，或null表示直接回复层主）",
+    "content": "楼中楼回复内容"
+  }
+]`;
                 }
+            } else {
+                 jsonExample = `[
+  {
+    "action": "new_main",
+    "content": "主评论内容",
+    "subComments": [
+      {"name": "吃瓜群众", "replyTo": "你的名字或null", "content": "确实是这样"}
+    ]
+  },
+  {
+    "action": "reply_sub",
+    "targetCommentId": "要回复的主评论的ID（从上面上下文获取）",
+    "replyTo": "被回复者的名字（或null表示直接回复层主）",
+    "content": "楼中楼回复内容"
+  }
+]`;
             }
 
             let prompt = `你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“我”的最新发言进行回复或围观）。
@@ -21623,24 +21669,10 @@ ${post.content}
 ${commentsContext}
 
 【要求】：
-1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。${extraRequirement}
+1. 生成 1 到 3 条新的评论。${extraRequirement}
 2. 语气要符合真实的网民，可以有赞同、反对、吐槽、玩梗等。
-3. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
-[
-  {
-    "action": "new_main",
-    "content": "主评论内容",
-    "subComments": [
-      {"name": "吃瓜群众", "replyTo": "你的名字或null", "content": "确实是这样"}
-    ]
-  },
-  {
-    "action": "reply_sub",
-    "targetCommentId": "${targetCommentId || "要回复的主评论的ID（从上面上下文获取）"}",
-    "replyTo": "被回复者的名字（例如'我'，或null表示直接回复层主）",
-    "content": "楼中楼回复内容"
-  }
-]`;
+3. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，格式示例如下：
+${jsonExample}`;
 
             try {
                 let aiResponseText = await callLLM(config, prompt, [{ type: 'sent', text: "请严格输出合法 JSON 格式的内容。" }]);
@@ -21754,7 +21786,7 @@ ${commentsContext}
                         document.getElementById('tieba-detail-comments-num').textContent = currentPost.comments;
                         const page = document.getElementById('tieba-post-detail-page');
                         const contentArea = page.querySelector('.tieba-content');
-                        if (contentArea) {
+                        if (contentArea && !isReplyToSubComment) {
                             setTimeout(() => {
                                 contentArea.scrollTop = contentArea.scrollHeight;
                             }, 50);
