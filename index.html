@@ -21600,12 +21600,12 @@ ${post.content}
                 });
             }
 
-            let prompt = \`你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“我”的最新发言进行回复或围观）。
+            let prompt = `你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“我”的最新发言进行回复或围观）。
 【原帖内容】：
-\${post.content}
+${post.content}
 
 【最近的评论区状态】：
-\${commentsContext}
+${commentsContext}
 
 【要求】：
 1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。
@@ -21625,7 +21625,7 @@ ${post.content}
     "replyTo": "被回复者的名字（例如刚才说话的'我'）",
     "content": "楼中楼回复内容"
   }
-]\`;
+]`;
 
             try {
                 let aiResponseText = await callLLM(config, prompt, [{ type: 'sent', text: "请严格输出合法 JSON 格式的内容。" }]);
@@ -21633,7 +21633,7 @@ ${post.content}
                     const currentPost = await new Promise(res => dbGet('tieba_posts', postId, res));
                     if (!currentPost) return;
 
-                    let jsonStr = aiResponseText.replace(/\\\`\\\`\\\`json/g, '').replace(/\\\`\\\`\\\`/g, '').trim();
+                    let jsonStr = aiResponseText.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
                     const startIdx = jsonStr.indexOf('[');
                     const endIdx = jsonStr.lastIndexOf(']');
                     if (startIdx !== -1 && endIdx !== -1) {
@@ -21926,9 +21926,6 @@ ${post.content}
         '#e3cfb4'
     ];
 
-</script>
-</body>
-</html>
 </script>
 </body>
 </html>
