@@ -21573,14 +21573,14 @@ ${post.content}
                                 }, 50);
                             }
                             
-                            generateTiebaAIReplies(post.id, targetCommentId);
+                            generateTiebaAIReplies(post.id, targetCommentId, isReplyToComment);
                         });
                     }
                 });
             });
         }
 
-        async function generateTiebaAIReplies(postId, targetCommentId = null) {
+        async function generateTiebaAIReplies(postId, targetCommentId = null, isReplyToSubComment = false) {
             const configStr = localStorage.getItem('globalConfig');
             if (!configStr) return;
             const config = JSON.parse(configStr);
@@ -21606,6 +21606,15 @@ ${post.content}
                 });
             }
 
+            let extraRequirement = '';
+            if (targetCommentId) {
+                if (isReplyToSubComment) {
+                    extraRequirement = `\n由于刚刚用户在一条评论的楼中楼里发表了新回复，请**强烈偏向于**生成楼中楼回复去互动和回应用户。被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)必须填 "我"。`;
+                } else {
+                    extraRequirement = `\n由于刚刚用户发表了新的一楼（主评论），你可以新建主评论互动，或者去用户的那个新楼层下发表楼中楼围观互动。如果是去用户的那个新楼层发楼中楼，该主评论ID为: ${targetCommentId}，且**不需要**填写replyTo字段（或者填null，因为是直接回复层主）。`;
+                }
+            }
+
             let prompt = `你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“我”的最新发言进行回复或围观）。
 【原帖内容】：
 ${post.content}
@@ -21614,7 +21623,7 @@ ${post.content}
 ${commentsContext}
 
 【要求】：
-1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。${targetCommentId ? `\n由于刚刚用户发表了新评论，请**强烈偏向于**生成楼中楼回复去互动和回应用户。被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)请填 "我"。` : ''}
+1. 生成 1 到 3 条新的评论。你可以新建一个主评论，也可以在已有的主评论下进行楼中楼回复。${extraRequirement}
 2. 语气要符合真实的网民，可以有赞同、反对、吐槽、玩梗等。
 3. 必须且仅输出合法的 JSON 数组格式，不要有任何多余的标记或解释，例如：
 [
@@ -21622,13 +21631,13 @@ ${commentsContext}
     "action": "new_main",
     "content": "主评论内容",
     "subComments": [
-      {"name": "吃瓜群众", "replyTo": "你的名字", "content": "确实是这样"}
+      {"name": "吃瓜群众", "replyTo": "你的名字或null", "content": "确实是这样"}
     ]
   },
   {
     "action": "reply_sub",
     "targetCommentId": "${targetCommentId || "要回复的主评论的ID（从上面上下文获取）"}",
-    "replyTo": "被回复者的名字（例如刚才说话的'我'）",
+    "replyTo": "被回复者的名字（例如'我'，或null表示直接回复层主）",
     "content": "楼中楼回复内容"
   }
 ]`;
@@ -21723,6 +21732,7 @@ ${commentsContext}
                             if (comment && act.content) {
                                 if (!comment.subComments) comment.subComments = [];
                                 let replyToName = act.replyTo;
+                                if (replyToName === 'null') replyToName = null;
                                 if (replyToName && nameMap[replyToName]) replyToName = nameMap[replyToName];
                                 else if (replyToName && replyToName !== '我') replyToName = generateRealisticNetName();
 
