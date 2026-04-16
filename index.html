@@ -14314,7 +14314,7 @@
                         } else if (!(friend.offlineSettings && friend.offlineSettings.enabled)) {
                             history.push({
                                 type: 'system',
-                                text: "【系统强制指令】当前是【微信线上聊天模式】！\n1. 严禁使用「」引号包裹对话。\n2. 严禁发送任何背景旁白、动作描写或心理活动（如“我看着...”、“手指...”等）。\n3. 请直接输出你要回复的文字内容，就像你在用微信打字一样。",
+                                text: "【系统强制指令】当前是【微信线上聊天模式】！\n1. 严禁使用「」引号包裹对话。\n2. 严禁发送任何背景旁白、动作描写或心理活动。\n3. 【最重要：强制拆分】只要你的回复包含多句话，就必须使用换行符将其拆分为多行！严禁回复一整段不换行的长文！必须像微信打字一样碎片化发送！",
                                 timestamp: Date.now()
                             });
                         }
@@ -21086,16 +21086,23 @@ ${historyText}`;
                 if (aiResponseText) {
                     const lines = aiResponseText.split('\n').filter(l => l.trim() !== '');
                     
+                    let usedAvatars = new Set();
+                    
                     let count = 0;
                     for (let i = 0; i < lines.length; i++) {
                         const content = lines[i].trim();
                         // remove leading numbers if any
                         const cleanContent = content.replace(/^\d+[\.、]\s*/, '');
                             if (cleanContent) {
+                                let availableAvatars = tiebaAvatars.filter(a => !usedAvatars.has(a));
+                                if (availableAvatars.length === 0) availableAvatars = tiebaAvatars;
+                                const selectedAvatar = availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
+                                usedAvatars.add(selectedAvatar);
+
                                 const post = {
                                     id: Date.now().toString() + '_' + i,
                                     authorName: generateRealisticNetName(),
-                                    authorAvatar: tiebaAvatars[Math.floor(Math.random() * tiebaAvatars.length)],
+                                    authorAvatar: selectedAvatar,
                                     content: cleanContent,
                                     timestamp: Date.now() - i * 1000, // Slightly offset so they order properly
                                 isRolePost: false,
