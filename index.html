@@ -14400,6 +14400,11 @@
 
                             const isOfflineMode = (friend.offlineSettings && friend.offlineSettings.enabled) || (friend.separateOfflineUI && document.getElementById('offline-chat-page').classList.contains('active'));
 
+                            // Remove newlines inside <fake_photo> tags to prevent fragmentation
+                            aiResponseText = aiResponseText.replace(/<fake_photo>([\s\S]*?)<\/fake_photo>/g, (match, p1) => {
+                                return `<fake_photo>${p1.replace(/\n/g, ' ')}</fake_photo>`;
+                            });
+
                             // Parse Thought Feature Tags
                             let mood = null;
                             let innerThought = null;
@@ -15794,6 +15799,11 @@
                         let aiResponseText = await callLLM(config, systemPrompt, history);
 
                         if (aiResponseText) {
+                            // Remove newlines inside <fake_photo> tags to prevent fragmentation
+                            aiResponseText = aiResponseText.replace(/<fake_photo>([\s\S]*?)<\/fake_photo>/g, (match, p1) => {
+                                return `<fake_photo>${p1.replace(/\n/g, ' ')}</fake_photo>`;
+                            });
+
                             // Parse Thought Feature Tags
                             let mood = null;
                             let innerThought = null;
