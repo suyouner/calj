@@ -11566,6 +11566,7 @@
                     });
                 }
             });
+            triggerAIResponse(false);
         }
 
         function openFakePhotoViewModal(desc) {
@@ -11735,6 +11736,7 @@
                     dbUpdate('friends', friend, renderChatList);
                 }
             });
+            triggerAIResponse(false);
             }
             e.target.value = ''; // Reset input
         });
@@ -15818,8 +15820,10 @@
                                     const matchedSticker = aiStickers.find(s => String(s.id) === stickerValue);
                                     if (matchedSticker) {
                                         aiStickerUrl = matchedSticker.src;
-                                    } else {
+                                    } else if (stickerValue.startsWith('http') || stickerValue.startsWith('data:image') || stickerValue.startsWith('./') || stickerValue.startsWith('/')) {
                                         aiStickerUrl = stickerValue;
+                                    } else {
+                                        aiStickerUrl = null;
                                     }
                                     partText = partText.replace(aiStickerRegex, '').trim();
                                 }
@@ -15827,6 +15831,7 @@
                                 // Parse Send Image Command
                                 const sendImageRegex = /<send_image>(.*?)<\/send_image>/;
                                 const sendImageMatch = partText.match(sendImageRegex);
+                                let aiFakePhotoDesc = null;
                                 if (sendImageMatch) {
                                     const imageIdOrUrl = sendImageMatch[1].trim();
                                     partText = partText.replace(sendImageRegex, '').trim();
@@ -15836,7 +15841,11 @@
                                         (m.text === imageIdOrUrl)
                                     );
                                     if (imageMsg) {
-                                        aiStickerUrl = imageMsg.text;
+                                        if (imageMsg.isFakePhoto) {
+                                            aiFakePhotoDesc = imageMsg.fakePhotoDesc;
+                                        } else {
+                                            aiStickerUrl = imageMsg.text;
+                                        }
                                     } else if (imageIdOrUrl.startsWith('http') || imageIdOrUrl.startsWith('data:image')) {
                                         aiStickerUrl = imageIdOrUrl;
                                     }
@@ -15951,7 +15960,7 @@
                                     partText = partText.replace(quoteRegex, '').trim();
                                 }
                                 
-                                if (partText === '' && !transferData && !aiStickerUrl && !hasDice && !locationData) {
+                                if (partText === '' && !transferData && !aiStickerUrl && !hasDice && !locationData && !aiFakePhotoDesc) {
                                     if (hasAction) {
                                         partText = actionText;
                                     } else if (hasMusicAction) {
@@ -15983,6 +15992,27 @@
                                     if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) addMessageToUI(locationMsg);
                                     else showBannerNotification(friend, `[位置] ${locationData.name}`);
                                     friend.lastMsg = `[位置] ${locationData.name}`;
+                                } else if (aiFakePhotoDesc) {
+                                    if (partText) {
+                                        const textMsg = { friendId: friend.id, text: partText, type: 'received', timestamp: Date.now() };
+                                        if (quoteData) textMsg.quote = quoteData;
+                                        await new Promise(resolve => dbAdd('chat_history', textMsg, resolve));
+                                        if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) addMessageToUI(textMsg);
+                                        else showBannerNotification(friend, partText);
+                                    }
+
+                                    const fakePhotoMsg = {
+                                        friendId: friend.id,
+                                        text: `[照片] ${aiFakePhotoDesc}`,
+                                        type: 'received',
+                                        timestamp: Date.now() + 100,
+                                        isFakePhoto: true,
+                                        fakePhotoDesc: aiFakePhotoDesc
+                                    };
+                                    await new Promise(resolve => dbAdd('chat_history', fakePhotoMsg, resolve));
+                                    if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) addMessageToUI(fakePhotoMsg);
+                                    else showBannerNotification(friend, '[照片]');
+                                    friend.lastMsg = '[照片]';
                                 } else if (transferData) {
                                     if (partText) {
                                         const textMsg = {
@@ -19430,6 +19460,7 @@ ${historyText}`;
             });
 
             closeLocationModal();
+            triggerAIResponse(false);
         }
 
         // --- Transfer Logic ---
@@ -19536,7 +19567,7 @@ ${historyText}`;
             });
 
             document.getElementById('transfer-modal').style.display = 'none';
-            // Do not trigger AI response automatically
+            triggerAIResponse(false);
         }
 
         function openTransferActionModal(msg) {
@@ -19596,6 +19627,7 @@ ${historyText}`;
                                 }
                             });
                         });
+                        triggerAIResponse(false);
                     });
                 }
             });
