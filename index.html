@@ -6233,6 +6233,7 @@
         <button class="message-context-menu-item" id="msg-ctx-retry">重试</button>
         <button class="message-context-menu-item" id="msg-ctx-copy">复制</button>
         <button class="message-context-menu-item" id="msg-ctx-edit">编辑</button>
+        <button class="message-context-menu-item" id="msg-ctx-split">拆分</button>
         <button class="message-context-menu-item" id="msg-ctx-quote">引用</button>
         <button class="message-context-menu-item" id="msg-ctx-recall">撤回</button>
         <button class="message-context-menu-item" id="msg-ctx-delete">删除</button>
@@ -6248,6 +6249,18 @@
             <div class="modal-actions" style="margin-top: 15px;">
                 <button class="cancel-btn" onclick="document.getElementById('edit-message-modal').style.display='none'">取消</button>
                 <button class="confirm-btn" onclick="saveEditedMessage()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split Message Modal -->
+    <div class="modal-overlay" id="split-message-modal" style="z-index: 2500;">
+        <div class="modal-content" style="width: 300px;">
+            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 10px;">拆分消息</h3>
+            <textarea id="split-message-content" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; resize: none; height: 120px; font-size: 14px; box-sizing: border-box;"></textarea>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="cancel-btn" onclick="document.getElementById('split-message-modal').style.display='none'">取消</button>
+                <button class="confirm-btn" onclick="saveSplitMessage()">确定</button>
             </div>
         </div>
     </div>
@@ -12057,12 +12070,14 @@
             activeMessageSegment = segmentInfo;
             
             const isOfflineMessage = e.target.closest('#offline-chat-messages') !== null;
+            const isSplittable = !msg.isSticker && !msg.isTransfer && !msg.isLocation && !msg.isFakePhoto && !msg.isInfo;
 
             if (isOfflineMessage) {
                 document.getElementById('msg-ctx-multiselect').style.display = 'none';
                 document.getElementById('msg-ctx-retry').style.display = 'none'; // The retry button is in the header
                 document.getElementById('msg-ctx-copy').style.display = 'block';
                 document.getElementById('msg-ctx-edit').style.display = 'block';
+                document.getElementById('msg-ctx-split').style.display = isSplittable ? 'block' : 'none';
                 document.getElementById('msg-ctx-quote').style.display = 'none';
                 document.getElementById('msg-ctx-recall').style.display = 'none';
                 document.getElementById('msg-ctx-delete').style.display = 'block';
@@ -12071,6 +12086,7 @@
                 document.getElementById('msg-ctx-retry').style.display = (msg.type === 'received') ? 'block' : 'none';
                 document.getElementById('msg-ctx-copy').style.display = 'block';
                 document.getElementById('msg-ctx-edit').style.display = 'block';
+                document.getElementById('msg-ctx-split').style.display = isSplittable ? 'block' : 'none';
                 document.getElementById('msg-ctx-quote').style.display = 'block';
                 document.getElementById('msg-ctx-recall').style.display = (msg.type === 'sent') ? 'block' : 'none';
                 document.getElementById('msg-ctx-delete').style.display = 'block';
@@ -12242,6 +12258,56 @@
             }
             msgContextMenu.style.display = 'none';
         });
+
+        document.getElementById('msg-ctx-split').addEventListener('click', () => {
+            if (activeMessage) {
+                document.getElementById('split-message-content').value = activeMessage.text;
+                document.getElementById('split-message-modal').style.display = 'flex';
+            }
+            msgContextMenu.style.display = 'none';
+        });
+
+        function saveSplitMessage() {
+            const content = document.getElementById('split-message-content').value;
+            if (!content.trim()) return;
+            
+            const lines = content.split('\n').filter(line => line.trim() !== '');
+            if (lines.length === 0) return;
+            
+            if (activeMessage) {
+                dbGetAll('chat_history', allMsgs => {
+                    const dbMsg = allMsgs.find(m => (m.id && activeMessage.id && String(m.id) === String(activeMessage.id)) || (m.friendId === activeMessage.friendId && String(m.timestamp) === String(activeMessage.timestamp)));
+                    if (dbMsg) {
+                        dbDelete('chat_history', dbMsg.id, () => {
+                            const baseTime = dbMsg.timestamp;
+                            
+                            const addNext = (index) => {
+                                if (index >= lines.length) {
+                                    document.getElementById('split-message-modal').style.display = 'none';
+                                    if (dbMsg.isOfflineSeparate || document.getElementById('offline-chat-page').classList.contains('active')) {
+                                        renderOfflineChat(currentChatFriendId, false, null);
+                                    } else {
+                                        renderMessages(currentChatFriendId);
+                                    }
+                                    return;
+                                }
+                                
+                                const newMsg = { ...dbMsg };
+                                delete newMsg.id; 
+                                newMsg.text = lines[index];
+                                newMsg.timestamp = baseTime + index; 
+                                
+                                dbAdd('chat_history', newMsg, () => {
+                                    addNext(index + 1);
+                                });
+                            };
+                            
+                            addNext(0);
+                        });
+                    }
+                });
+            }
+        }
 
         // --- Selection Mode Logic ---
         let isSelectionMode = false;
