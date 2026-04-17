@@ -6256,9 +6256,9 @@
     <!-- Split Message Modal -->
     <div class="modal-overlay" id="split-message-modal" style="z-index: 2500;">
         <div class="modal-content" style="width: 300px;">
-            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 10px;">拆分消息</h3>
+            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 10px;">拆分消息（分句消息使用）</h3>
             <textarea id="split-message-content" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; resize: none; height: 120px; font-size: 14px; box-sizing: border-box;"></textarea>
-            <div class="modal-actions" style="margin-top: 15px;">
+            <div class="modal-actions" style="margin-top: 15px;"> 
                 <button class="cancel-btn" onclick="document.getElementById('split-message-modal').style.display='none'">取消</button>
                 <button class="confirm-btn" onclick="saveSplitMessage()">确定</button>
             </div>
@@ -11633,7 +11633,7 @@
                         if (friend && friend.isGroup) {
                             items.forEach(item => {
                                 const name = item.querySelector('.action-name').textContent;
-                                if (name !== '图片' && name !== '线下模式') {
+                                if (name !== '图片' && name !== '线下模式' && name !== '拍照') {
                                     item.style.display = 'none';
                                 } else {
                                     item.style.display = 'flex';
@@ -14496,7 +14496,7 @@
                                             }
 
                                             let hasDice = false;
-                                            const fakePhotoRegex = /<fake_photo>(.*?)<\/fake_photo>/;
+                                            const fakePhotoRegex = /<fake_photo>([\s\S]*?)<\/fake_photo>/;
                                             const fakePhotoMatch = text.match(fakePhotoRegex);
                                             let aiFakePhotoDesc = null;
                                             if (fakePhotoMatch) {
@@ -14771,6 +14771,15 @@
                                     partText = partText.replace(aiStickerRegex, '').trim();
                                 }
 
+
+                                // Parse Fake Photo
+                                let aiFakePhotoDesc = null;
+                                const fakePhotoRegex = /<fake_photo>([\s\S]*?)<\/fake_photo>/;
+                                const fakePhotoMatch = partText.match(fakePhotoRegex);
+                                if (fakePhotoMatch) {
+                                    aiFakePhotoDesc = fakePhotoMatch[1].trim();
+                                    partText = partText.replace(fakePhotoRegex, '').trim();
+                                }
 
                                 // Parse Send Image Command
                                     const sendImageRegex = /<send_image>(.*?)<\/send_image>/;
@@ -15381,7 +15390,8 @@
 7. 更换头像：如果用户发给你一张或多张图片让你换头像，你的反应要符合人设，这可以是一个多回合的互动。你可以同意、拒绝，或者先拉扯几句再同意。例如：\n- **如果你是傲娇型**：你可以先说‘我才不要，这个不好看’，如果用户哄你，你再说‘好吧好吧，真拿你没办法……’，然后输出 <change_avatar>图片ID</change_avatar> 指令。\n- **如果你想提条件**：你可以说‘换倒是可以，不过你得先夸我几句’，等用户夸完你再输出指令。\n- **如果你想马上换**：直接换，说出符合人设的话，并输出指令。\n- **核心**：让互动更真实，你可以先拒绝或嘴硬，等用户哄你或满足条件后，再输出 <change_avatar>图片ID或图片链接</change_avatar> 指令来完成更换。如果就是不想换，也可以根据人设坚持拒绝。
 8. 发送图片：如果用户发给你图片并希望你把它发出来（例如玩梗等），你可以根据人设直接答应或者进行多回合互动。当你决定要发这张照片时，请输出 <send_image>图片ID或图片链接</send_image> 指令，系统会自动帮你把那张图发出去。
 9. 删除朋友圈：如果用户在聊天中提到让你删掉某条朋友圈动态，你可以根据人设决定是否同意。如果同意，请在回复中包含指令 <delete_moment>动态关键字或ID</delete_moment>，系统会自动帮你删除包含该关键字的最新一条朋友圈。如果你不想删，可以找理由拒绝。
-10. 发送位置：如果你想发送一个地理位置，请使用格式：<location name="位置名称">详细地址（可选）</location>。系统会自动将其渲染为位置卡片。你可以在发送位置的同时附带额外的文字。`;
+10. 发送位置：如果你想发送一个地理位置，请使用格式：<location name="位置名称">详细地址（可选）</location>。系统会自动将其渲染为位置卡片。你可以在发送位置的同时附带额外的文字。
+11. 拍照发送：如果用户希望你拍照分享当前的画面（比如自拍、风景等），或者你主动想给对方发送一张现拍的照片，请在回复中包含单独的一行：<fake_photo>照片画面的详细描述</fake_photo>。系统会自动将其渲染为照片卡片。你可以附带额外的聊天文字，但 <fake_photo> 标签内只能是纯文本描述。`;
             }
             prompt += `\n请根据上述人设和记忆，以${friend.name}的口吻进行自然地回复。`;
             return prompt;
