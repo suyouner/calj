@@ -14496,6 +14496,14 @@
                                             }
 
                                             let hasDice = false;
+                                            const fakePhotoRegex = /<fake_photo>(.*?)<\/fake_photo>/;
+                                            const fakePhotoMatch = text.match(fakePhotoRegex);
+                                            let aiFakePhotoDesc = null;
+                                            if (fakePhotoMatch) {
+                                                aiFakePhotoDesc = fakePhotoMatch[1].trim();
+                                                text = text.replace(fakePhotoRegex, '').trim();
+                                            }
+
                                             if (text.includes('<dice></dice>')) {
                                                 hasDice = true;
                                                 text = text.replace(/<dice><\/dice>/g, '').trim();
@@ -14584,10 +14592,35 @@
                                                 await new Promise(resolve => dbAdd('chat_history', diceMsg, resolve));
                                             }
 
+                                            if (aiFakePhotoDesc) {
+                                                const fakePhotoMsg = {
+                                                    friendId: friend.id,
+                                                    senderId: senderMember.id,
+                                                    senderName: senderMember.name,
+                                                    senderAvatar: senderMember.avatar,
+                                                    text: \`[照片] \${aiFakePhotoDesc}\`,
+                                                    type: 'received',
+                                                    timestamp: Date.now() + 30,
+                                                    isFakePhoto: true,
+                                                    fakePhotoDesc: aiFakePhotoDesc,
+                                                    isOffline: isOfflineMode,
+                                                    isOfflineSeparate: isSeparateUI
+                                                };
+                                                if (currentChatFriendId === friend.id) {
+                                                    if (!isSeparateUI && document.getElementById('chat-interface-page').classList.contains('active')) {
+                                                        addMessageToUI(fakePhotoMsg);
+                                                    } else if (isSeparateUI && document.getElementById('offline-chat-page').classList.contains('active')) {
+                                                        addMessageToUI(fakePhotoMsg); 
+                                                    }
+                                                }
+                                                await new Promise(resolve => dbAdd('chat_history', fakePhotoMsg, resolve));
+                                            }
+
                                             let lastMsgPreview = text;
                                             if (!lastMsgPreview) {
                                                 if (stickerUrl) lastMsgPreview = '[表情包]';
                                                 if (hasDice) lastMsgPreview = '[骰子]';
+                                                if (aiFakePhotoDesc) lastMsgPreview = '[照片]';
                                             }
                                             friend.lastMsg = `${senderMember.name}: ${lastMsgPreview}`;
                                             friend.lastTime = getCurrentTimeStr();
