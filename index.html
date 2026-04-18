@@ -11566,7 +11566,6 @@
                     });
                 }
             });
-            triggerAIResponse(false);
         }
 
         function openFakePhotoViewModal(desc) {
@@ -11736,7 +11735,6 @@
                     dbUpdate('friends', friend, renderChatList);
                 }
             });
-            triggerAIResponse(false);
             }
             e.target.value = ''; // Reset input
         });
@@ -13473,6 +13471,10 @@
                         callback(dataUrl);
                     }, 10);
                 };
+                img.onerror = () => {
+                    // Fallback to original data URL if image fails to load
+                    callback(e.target.result);
+                };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
@@ -14406,7 +14408,7 @@
                             });
 
                             // Parse Thought Feature Tags
-                            let mood = null;
+                            let mood = null; 
                             let innerThought = null;
                             
                             // Handle Mood - support multiple but take the last one, remove all
