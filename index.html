@@ -3833,6 +3833,11 @@
             border-bottom-right-radius: 5px;
         }
 
+        .offline-bubble.left.npc-bubble {
+            background-color: #e8f5e9 !important; /* 很浅的绿色 */
+            border-color: #c8e6c9 !important;
+        }
+
         .offline-thought-bubble {
             background-color: #fff !important;
             border: 2px dashed #ddd !important;
@@ -5563,6 +5568,8 @@
                 <span class="back-arrow" onclick="exitOfflineChat()"><</span>
                 <span class="title" id="offline-chat-title"></span>
                 <div style="display: flex; gap: 15px; align-items: center;">
+                    <svg id="offline-npc-icon-btn" onclick="openOfflineNpcModal()" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    <span id="offline-npc-exit-btn" onclick="exitOfflineNpc()" style="display: none; cursor: pointer; font-size: 14px; color: #333; font-weight: 500;">退出NPC</span>
                     <svg onclick="retryLastOfflineMessage()" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor: pointer;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                     <svg onclick="openOfflineSettingsModal(false)" class="settings-btn" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="cursor: pointer;"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM12 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
                 </div>
@@ -6663,6 +6670,27 @@
             <div class="modal-actions" style="margin-top: 20px;">
                 <button class="cancel-btn" style="background-color: #fff; border: 1px solid #ddd;" onclick="closeRoleMomentsModal()">取消</button>
                 <button class="save-btn" onclick="saveRoleMomentsSettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offline NPC Modal -->
+    <div class="modal-overlay" id="offline-npc-modal">
+        <div class="modal-content" style="width: 300px;">
+            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 15px;">切换为NPC身份</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div>
+                    <label style="font-size: 14px; font-weight: 500;">NPC名称</label>
+                    <input type="text" id="offline-npc-name" placeholder="输入NPC名称" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; margin-top: 5px;">
+                </div>
+                <div>
+                    <label style="font-size: 14px; font-weight: 500;">NPC人设</label>
+                    <textarea id="offline-npc-persona" placeholder="简单描述该NPC的人设" rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; resize: none; margin-top: 5px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="cancel-btn" onclick="closeOfflineNpcModal()">取消</button>
+                <button class="confirm-btn" style="background-color: #333; color: #fff;" onclick="switchToOfflineNpc()">确定</button>
             </div>
         </div>
     </div>
@@ -18520,6 +18548,7 @@ ${historyText}`;
         }
 
         function exitOfflineChat() {
+            if (typeof exitOfflineNpc === 'function') exitOfflineNpc();
             if (currentChatFriendId) {
                 dbGet('friends', currentChatFriendId, friend => {
                     if (friend && friend.offlineSettings && friend.offlineSettings.enabled) {
@@ -18725,6 +18754,7 @@ ${historyText}`;
                         
                         const bubble = document.createElement('div');
                         bubble.className = 'offline-bubble left';
+                        if (msg.isNpc) bubble.classList.add('npc-bubble');
                         bubble.innerHTML = seg.content.replace(/\n/g, '<br>');
 
                         attachMessageEvents(bubble, msg, segmentInfo);
@@ -18760,6 +18790,7 @@ ${historyText}`;
                             
                             const bubble = document.createElement('div');
                             bubble.className = 'offline-bubble left offline-thought-bubble';
+                            if (msg.isNpc) bubble.classList.add('npc-bubble');
                             bubble.innerHTML = seg.content.replace(/\n/g, '<br>');
 
                             attachMessageEvents(bubble, msg, segmentInfo);
@@ -18796,6 +18827,7 @@ ${historyText}`;
                     
                     const bubble = document.createElement('div');
                     bubble.className = 'offline-bubble left offline-thought-bubble';
+                    if (msg.isNpc) bubble.classList.add('npc-bubble');
                     bubble.innerHTML = '...';
                     
                     attachMessageEvents(bubble, msg, { index: 0, type: 'thought', content: currentThoughts[0] });
@@ -19016,18 +19048,87 @@ ${historyText}`;
             renderMiniPhoneChatList();
         }
 
+        let offlineNpcState = {
+            active: false,
+            name: '',
+            persona: ''
+        };
+
+        function openOfflineNpcModal() {
+            document.getElementById('offline-npc-modal').style.display = 'flex';
+        }
+
+        function closeOfflineNpcModal() {
+            document.getElementById('offline-npc-modal').style.display = 'none';
+        }
+
+        function switchToOfflineNpc() {
+            const name = document.getElementById('offline-npc-name').value.trim();
+            const persona = document.getElementById('offline-npc-persona').value.trim();
+            if (!name) {
+                showToast('请输入NPC名称');
+                return;
+            }
+            offlineNpcState = {
+                active: true,
+                name: name,
+                persona: persona
+            };
+            closeOfflineNpcModal();
+            updateOfflineNpcUI();
+            
+            if (currentChatFriendId) {
+                const sysMsg = {
+                    friendId: currentChatFriendId,
+                    text: `【系统提示】场景中出现了NPC，名称：${name}，人设：${persona}。你需要认知到这个NPC的存在，但你只能扮演当前角色，禁止扮演NPC。`,
+                    type: 'system',
+                    timestamp: Date.now()
+                };
+                dbAdd('chat_history', sysMsg);
+            }
+        }
+
+        function updateOfflineNpcUI() {
+            const input = document.getElementById('offline-chat-input');
+            const iconBtn = document.getElementById('offline-npc-icon-btn');
+            const exitBtn = document.getElementById('offline-npc-exit-btn');
+            
+            if (offlineNpcState.active) {
+                input.placeholder = `扮演${offlineNpcState.name}发言...`;
+                iconBtn.style.display = 'none';
+                exitBtn.style.display = 'block';
+            } else {
+                input.placeholder = '输入...';
+                iconBtn.style.display = 'block';
+                exitBtn.style.display = 'none';
+            }
+        }
+
+        function exitOfflineNpc() {
+            offlineNpcState.active = false;
+            updateOfflineNpcUI();
+        }
+
         function sendOfflineMessage() {
             const input = document.getElementById('offline-chat-input');
             const messageText = input.value.trim();
             if (messageText === '' || !currentChatFriendId) return;
 
-            const message = {
+            let message = {
                 friendId: currentChatFriendId,
                 text: messageText,
                 type: 'sent',
                 timestamp: Date.now(),
                 isOfflineSeparate: true
             };
+
+            if (offlineNpcState.active) {
+                message.type = 'received';
+                message.senderName = offlineNpcState.name;
+                message.senderPersona = offlineNpcState.persona;
+                message.isNpc = true;
+                message.senderAvatar = 'https://via.placeholder.com/150/CCCCCC/ffffff?text=NPC';
+            }
 
             dbAdd('chat_history', message, () => {
                 dbGet('friends', currentChatFriendId, friend => {
