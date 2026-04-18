@@ -19111,7 +19111,7 @@ ${historyText}`;
 
         function sendOfflineMessage() {
             const input = document.getElementById('offline-chat-input');
-            const messageText = input.value.trim();
+            let messageText = input.value.trim();
             if (messageText === '' || !currentChatFriendId) return;
 
             let message = {
@@ -19123,6 +19123,11 @@ ${historyText}`;
             };
 
             if (offlineNpcState.active) {
+                if (!messageText.includes('「') && !messageText.includes('」') && !messageText.includes('<thought>') && !messageText.includes('<inner_thought>')) {
+                    messageText = '「' + messageText + '」';
+                    message.text = messageText;
+                }
+                
                 message.type = 'received';
                 message.senderName = offlineNpcState.name;
                 message.senderPersona = offlineNpcState.persona;
