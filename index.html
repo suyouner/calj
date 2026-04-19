@@ -5668,7 +5668,7 @@
             <!-- 底部操作栏 -->
             <div style="height: 50px; background-color: #fff; border-top: 1px solid #eaeaea; display: flex; align-items: center; padding: 0 15px; gap: 15px; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom);">
                 <input type="text" id="tieba-detail-comment-input" placeholder="发评论..." style="flex: 1; height: 34px; border-radius: 17px; border: none; background: #f5f5f5; padding: 0 15px; outline: none; font-size: 14px;">
-                <div style="display: flex; gap: 15px; color: #666; font-size: 18px; align-items: center;">
+                <div id="tieba-detail-icons-container" style="display: flex; gap: 15px; color: #666; font-size: 18px; align-items: center;">
                     <div style="display: flex; align-items: center; gap: 3px;" id="tieba-detail-bottom-reposts">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"></polyline><path d="M4 4v7a4 4 0 0 0 4 4h12"></path></svg>
                         <span style="font-size: 12px;" id="tieba-detail-reposts-num">0</span>
@@ -5682,6 +5682,7 @@
                         <span style="font-size: 12px;" id="tieba-detail-likes-num">0</span>
                     </div>
                 </div>
+                <button id="tieba-detail-send-btn" style="display: none; background-color: #eb7350; color: white; border: none; border-radius: 17px; padding: 0 15px; height: 34px; font-size: 14px; font-weight: bold; cursor: pointer;" onclick="submitTiebaDetailComment()">发送</button>
             </div>
         </div>
 
@@ -21699,6 +21700,7 @@ ${historyText}`;
                 input.value = '';
                 input.placeholder = '发评论...';
             }
+            if (typeof resetTiebaDetailInputState === 'function') resetTiebaDetailInputState();
             showPage('tieba-page');
         }
 
@@ -21997,6 +21999,7 @@ ${post.content}
                             input.placeholder = '发评论...';
                             currentTiebaReplyCommentId = null;
                             currentTiebaReplyToName = null;
+                            if (typeof resetTiebaDetailInputState === 'function') resetTiebaDetailInputState();
                             document.getElementById('tieba-detail-comments-num').textContent = post.comments;
                             renderTiebaCommentsList(post);
                             const page = document.getElementById('tieba-post-detail-page');
@@ -22278,6 +22281,8 @@ ${jsonExample}`;
         });
 
         const tiebaDetailCommentInput = document.getElementById('tieba-detail-comment-input');
+        const tiebaDetailIconsContainer = document.getElementById('tieba-detail-icons-container');
+        const tiebaDetailSendBtn = document.getElementById('tieba-detail-send-btn');
         if (tiebaDetailCommentInput) {
             tiebaDetailCommentInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -22285,6 +22290,22 @@ ${jsonExample}`;
                     submitTiebaDetailComment();
                 }
             });
+            
+            tiebaDetailCommentInput.addEventListener('input', () => {
+                if (tiebaDetailCommentInput.value.trim() !== '') {
+                    if (tiebaDetailIconsContainer) tiebaDetailIconsContainer.style.display = 'none';
+                    if (tiebaDetailSendBtn) tiebaDetailSendBtn.style.display = 'block';
+                } else {
+                    if (tiebaDetailIconsContainer) tiebaDetailIconsContainer.style.display = 'flex';
+                    if (tiebaDetailSendBtn) tiebaDetailSendBtn.style.display = 'none';
+                }
+            });
+        }
+
+        function resetTiebaDetailInputState() {
+            if (tiebaDetailCommentInput) tiebaDetailCommentInput.value = '';
+            if (tiebaDetailIconsContainer) tiebaDetailIconsContainer.style.display = 'flex';
+            if (tiebaDetailSendBtn) tiebaDetailSendBtn.style.display = 'none';
         }
 
         // 监听输入框焦点，在弹窗中时自动滚动以防被键盘遮挡
