@@ -18762,6 +18762,14 @@ ${historyText}`;
                 dbGet('user_profile', 'main_user', profile => {
                     if (profile && profile.name) nameLabel.textContent = profile.name;
                     if (!friend.myAvatar && profile && profile.avatar) avatar.src = profile.avatar;
+                    
+                    if (friend && friend.myPersonaId) {
+                        dbGet('my_personas', friend.myPersonaId, persona => {
+                            if (persona && persona.name) {
+                                nameLabel.textContent = persona.name;
+                            }
+                        });
+                    }
                 });
 
                 bubbleContainer.appendChild(contentGroup);
