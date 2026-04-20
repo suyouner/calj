@@ -8610,7 +8610,6 @@
             }
 
             const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
-            const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
             const history = await dbGetRecentHistoryPromise(friend.id, shortTermCount);
 
             history.push({
