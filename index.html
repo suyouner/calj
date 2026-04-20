@@ -6894,6 +6894,52 @@
             request.onerror = (e) => console.error(`Error getting from ${storeName}:`, e.target.error);
         }
 
+        function dbGetRecentHistory(friendId, limit, callback) {
+            if (!db) {
+                if (callback) callback([]);
+                return;
+            }
+            const transaction = db.transaction(['chat_history'], 'readonly');
+            const store = transaction.objectStore('chat_history');
+            const index = store.index('friendId');
+            const request = index.openCursor(IDBKeyRange.only(friendId), 'prev');
+
+            const results = [];
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor && (limit === undefined || limit === null || results.length < limit)) {
+                    results.unshift(cursor.value); // Use unshift to keep chronological order since we iterate 'prev'
+                    cursor.continue();
+                } else {
+                    if (callback) callback(results);
+                }
+            };
+            request.onerror = (e) => {
+                console.error(`Error getting recent history:`, e.target.error);
+                if (callback) callback([]);
+            };
+        }
+
+        function dbGetLastMessage(friendId, callback) {
+            if (!db) {
+                if (callback) callback(null);
+                return;
+            }
+            const transaction = db.transaction(['chat_history'], 'readonly');
+            const store = transaction.objectStore('chat_history');
+            const index = store.index('friendId');
+            const request = index.openCursor(IDBKeyRange.only(friendId), 'prev');
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (callback) callback(cursor.value);
+                } else {
+                    if (callback) callback(null);
+                }
+            };
+            request.onerror = () => { if (callback) callback(null); };
+        }
+
         function dbUpdate(storeName, item, callback) {
             if (!db) return;
             const transaction = db.transaction([storeName], 'readwrite');
@@ -6912,45 +6958,34 @@
             request.onerror = (e) => console.error(`Error deleting from ${storeName}:`, e.target.error);
         }
 
-        function dbGetRecentHistoryPromise(friendId, limit, filterFn = null) {
-            return new Promise(resolve => {
-                if (!db) return resolve([]);
-                const transaction = db.transaction(['chat_history'], 'readonly');
-                const store = transaction.objectStore('chat_history');
-                const index = store.index('friendId');
-                const request = index.openCursor(IDBKeyRange.only(friendId), 'prev');
-                const results = [];
-                request.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (cursor && results.length < limit) {
-                        if (!filterFn || filterFn(cursor.value)) {
-                            results.push(cursor.value);
+        function dbGetMessage(msgId, friendId, timestamp, callback) {
+            dbGet('chat_history', msgId || timestamp, dbMsg => {
+                if (dbMsg) {
+                    callback(dbMsg);
+                } else {
+                    const transaction = db.transaction(['chat_history'], 'readonly');
+                    const store = transaction.objectStore('chat_history');
+                    const index = store.index('friendId');
+                    const request = index.openCursor(IDBKeyRange.only(friendId), 'prev');
+                    
+                    request.onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (cursor) {
+                            if (cursor.value.timestamp === timestamp || cursor.value.id === msgId) {
+                                callback(cursor.value);
+                                return;
+                            }
+                            if (cursor.value.timestamp < timestamp - 5000) {
+                                callback(null);
+                                return;
+                            }
+                            cursor.continue();
+                        } else {
+                            callback(null);
                         }
-                        cursor.continue();
-                    } else {
-                        resolve(results.reverse());
-                    }
-                };
-                request.onerror = () => resolve([]);
-            });
-        }
-
-        function dbGetLastMessagePromise(friendId) {
-            return new Promise(resolve => {
-                if (!db) return resolve(null);
-                const transaction = db.transaction(['chat_history'], 'readonly');
-                const store = transaction.objectStore('chat_history');
-                const index = store.index('friendId');
-                const request = index.openCursor(IDBKeyRange.only(friendId), 'prev');
-                request.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (cursor) {
-                        resolve(cursor.value);
-                    } else {
-                        resolve(null);
-                    }
-                };
-                request.onerror = () => resolve(null);
+                    };
+                    request.onerror = () => { callback(null); };
+                }
             });
         }
 
@@ -8593,7 +8628,11 @@
                     const store = transaction.objectStore('ai_stickers');
                     const index = store.index('friendId');
                     const req = index.getAll(friend.id);
-                    req.onsuccess = () => resolve(req.result);
+                    req.onsuccess = () => {
+                        const result = req.result || [];
+                        // 提取轻量级必要数据：ID, SRC 和描述，避免携带可能的巨大冗余信息
+                        resolve(result.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                    };
                     req.onerror = () => resolve([]);
                 } catch(e) {
                     resolve([]);
@@ -8610,7 +8649,9 @@
             }
 
             const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
-            const history = await dbGetRecentHistoryPromise(friend.id, shortTermCount);
+            const history = await new Promise(resolve => {
+                dbGetRecentHistory(friend.id, shortTermCount, resolve);
+            });
 
             history.push({
                 type: 'system',
@@ -8960,7 +9001,9 @@
                     if (friendRootCommentsCount >= 2 && hasLiked && (post.comments || []).filter(c => c.authorId === friend.id).length > 10) continue;
 
                     const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
-                    const recentHistory = await dbGetRecentHistoryPromise(friend.id, shortTermCount);
+                    const recentHistory = await new Promise(res => {
+                        dbGetRecentHistory(friend.id, shortTermCount, res);
+                    });
 
                     let userPersona = null;
                     if (friend.myPersonaId) {
@@ -11199,144 +11242,141 @@
                 return;
             }
 
-            dbGetAll('friends', async friends => {
-                list.innerHTML = '';
-                
-                const matchedFriends = friends.filter(f => 
-                    !f.isHidden && 
-                    ((f.name && f.name.toLowerCase().includes(keyword)) || 
-                     (f.realName && f.realName.toLowerCase().includes(keyword)))
-                );
-                
-                if (matchedFriends.length > 0) {
-                    const groupHeader = document.createElement('div');
-                    groupHeader.style.padding = '4px 15px';
-                    groupHeader.style.backgroundColor = '#f7f7f7';
-                    groupHeader.style.color = '#888';
-                    groupHeader.style.fontSize = '13px';
-                    groupHeader.textContent = '联系人';
-                    list.appendChild(groupHeader);
-                    
-                    matchedFriends.forEach(friend => {
-                        const item = document.createElement('div');
-                        item.className = 'chat-item';
-                        item.style.cursor = 'pointer';
-                        
-                        const regex = new RegExp(`(${keyword})`, 'gi');
-                        const highlightedName = friend.name.replace(regex, '<span style="color:#07c160">$1</span>');
-
-                        item.innerHTML = `
-                            <img class="chat-avatar" src="${friend.avatar}" alt="${friend.name}">
-                            <div class="chat-info" style="justify-content: center;">
-                                <span class="chat-name">${highlightedName}</span>
-                            </div>
-                        `;
-                        item.onclick = () => openChat(friend.id);
-                        list.appendChild(item);
-                    });
-                }
-
-                // Search chat history using cursor
-                const matchedMessages = [];
-                const transaction = db.transaction(['chat_history'], 'readonly');
-                const store = transaction.objectStore('chat_history');
-                const request = store.openCursor();
-                
-                request.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (cursor) {
-                        const msg = cursor.value;
-                        let match = false;
-                        if (msg.type !== 'system' && msg.text) {
-                            if (msg.isSticker && !msg.text.startsWith('http') && !msg.text.startsWith('data:')) {
-                                if (msg.text.toLowerCase().includes(keyword)) match = true;
-                            }
-                            if (msg.stickerDescription && msg.stickerDescription.toLowerCase().includes(keyword)) match = true;
-                            if (!msg.isSticker && !msg.isTransfer && msg.text.toLowerCase().includes(keyword)) match = true;
-                        }
-                        
-                        if (match) {
+            dbGetAll('friends', friends => {
+            const transaction = db.transaction(['chat_history'], 'readonly');
+            const store = transaction.objectStore('chat_history');
+            const request = store.openCursor();
+            
+            const matchedMessages = [];
+            
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const msg = cursor.value;
+                    if (msg.type !== 'system' && msg.text) {
+                        if (msg.isSticker && !msg.text.startsWith('http') && !msg.text.startsWith('data:')) {
+                            if (msg.text.toLowerCase().includes(keyword)) matchedMessages.push(msg);
+                        } else if (msg.stickerDescription && msg.stickerDescription.toLowerCase().includes(keyword)) {
+                            matchedMessages.push(msg);
+                        } else if (!msg.isSticker && !msg.isTransfer && msg.text.toLowerCase().includes(keyword)) {
                             matchedMessages.push(msg);
                         }
-                        cursor.continue();
-                    } else {
-                        // Done searching history
-                        if (matchedMessages.length > 0) {
-                            const groupHeader = document.createElement('div');
-                            groupHeader.style.padding = '4px 15px';
-                            groupHeader.style.backgroundColor = '#f7f7f7';
-                            groupHeader.style.color = '#888';
-                            groupHeader.style.fontSize = '13px';
-                            groupHeader.textContent = '聊天记录';
-                            list.appendChild(groupHeader);
-                            
-                            // Group messages by friend
-                            const msgsByFriend = {};
-                            matchedMessages.forEach(msg => {
-                                if (!msgsByFriend[msg.friendId]) msgsByFriend[msg.friendId] = [];
-                                msgsByFriend[msg.friendId].push(msg);
-                            });
-
-                            // Sort friends by newest message
-                            const friendIds = Object.keys(msgsByFriend).sort((a, b) => {
-                                const lastA = msgsByFriend[a][msgsByFriend[a].length - 1].timestamp;
-                                const lastB = msgsByFriend[b][msgsByFriend[b].length - 1].timestamp;
-                                return lastB - lastA;
-                            });
-
-                            friendIds.forEach(friendId => {
-                                const friendMsgs = msgsByFriend[friendId];
-                                const friend = friends.find(f => f.id === friendId);
-                                if (!friend || friend.isHidden) return;
-
-                                const item = document.createElement('div');
-                                item.className = 'chat-item';
-                                item.style.cursor = 'pointer';
-
-                                if (friendMsgs.length > 1) {
-                                    item.innerHTML = `
-                                        <img class="chat-avatar" src="${friend.avatar}" alt="${friend.name}">
-                                        <div class="chat-info" style="justify-content: center;">
-                                            <span class="chat-name">${friend.name}</span>
-                                            <div class="chat-preview" style="color: #999; margin-top: 4px;">${friendMsgs.length}条相关的聊天记录</div>
-                                        </div>
-                                    `;
-                                    item.onclick = () => showInlineSearchDetails(friend.id, keyword);
-                                } else {
-                                    const msg = friendMsgs[0];
-                                    let previewText = msg.text.replace(/<[^>]+>/g, '');
-                                    if (msg.isSticker && msg.stickerDescription) previewText = `[表情包] ${msg.stickerDescription}`;
-                                    else if (msg.isSticker && msg.isDice) previewText = `[骰子]`;
-                                    else if (msg.isSticker) previewText = `[表情包]`;
-                                    else if (msg.isImage) previewText = `[图片]`;
-                                    
-                                    const regex = new RegExp(`(${keyword})`, 'gi');
-                                    const highlightedText = previewText.replace(regex, '<span style="color:#07c160">$1</span>');
-
-                                    const msgDate = new Date(msg.timestamp);
-                                    const timeStr = `${msgDate.getMonth()+1}-${msgDate.getDate()}`;
-
-                                    item.innerHTML = `
-                                        <img class="chat-avatar" src="${friend.avatar}" alt="${friend.name}">
-                                        <div class="chat-info">
-                                            <div class="chat-top">
-                                                <span class="chat-name">${friend.name}</span>
-                                                <span class="chat-time">${timeStr}</span>
-                                            </div>
-                                            <div class="chat-preview">${highlightedText}</div>
-                                        </div>
-                                    `;
-                                    item.onclick = () => openChat(friend.id, msg.id || msg.timestamp);
-                                }
-                                list.appendChild(item);
-                            });
-                        }
-                        
-                        if (matchedFriends.length === 0 && matchedMessages.length === 0) {
-                            list.innerHTML = '<div style="text-align:center; padding: 30px; color:#999; font-size:14px;">无搜索结果</div>';
-                        }
                     }
-                };
+                    cursor.continue();
+                } else {
+                    // Search completed
+                    list.innerHTML = '';
+                    
+                    const matchedFriends = friends.filter(f => 
+                        !f.isHidden && 
+                        ((f.name && f.name.toLowerCase().includes(keyword)) || 
+                         (f.realName && f.realName.toLowerCase().includes(keyword)))
+                    );
+                    
+                    if (matchedFriends.length > 0) {
+                        const groupHeader = document.createElement('div');
+                        groupHeader.style.padding = '4px 15px';
+                        groupHeader.style.backgroundColor = '#f7f7f7';
+                        groupHeader.style.color = '#888';
+                        groupHeader.style.fontSize = '13px';
+                        groupHeader.textContent = '联系人';
+                        list.appendChild(groupHeader);
+                        
+                        matchedFriends.forEach(friend => {
+                            const item = document.createElement('div');
+                            item.className = 'chat-item';
+                            item.style.cursor = 'pointer';
+                            
+                            const regex = new RegExp(`(${keyword})`, 'gi');
+                            const highlightedName = friend.name.replace(regex, '<span style="color:#07c160">$1</span>');
+
+                            item.innerHTML = `
+                                <img class="chat-avatar" src="${friend.avatar}" alt="${friend.name}">
+                                <div class="chat-info" style="justify-content: center;">
+                                    <span class="chat-name">${highlightedName}</span>
+                                </div>
+                            `;
+                            item.onclick = () => openChat(friend.id);
+                            list.appendChild(item);
+                        });
+                    }
+
+                    if (matchedMessages.length > 0) {
+                        const groupHeader = document.createElement('div');
+                        groupHeader.style.padding = '4px 15px';
+                        groupHeader.style.backgroundColor = '#f7f7f7';
+                        groupHeader.style.color = '#888';
+                        groupHeader.style.fontSize = '13px';
+                        groupHeader.textContent = '聊天记录';
+                        list.appendChild(groupHeader);
+                        
+                        // Group messages by friend
+                        const msgsByFriend = {};
+                        matchedMessages.forEach(msg => {
+                            if (!msgsByFriend[msg.friendId]) msgsByFriend[msg.friendId] = [];
+                            msgsByFriend[msg.friendId].push(msg);
+                        });
+
+                        // Sort friends by newest message
+                        const friendIds = Object.keys(msgsByFriend).sort((a, b) => {
+                            const lastA = msgsByFriend[a][msgsByFriend[a].length - 1].timestamp;
+                            const lastB = msgsByFriend[b][msgsByFriend[b].length - 1].timestamp;
+                            return lastB - lastA;
+                        });
+
+                        friendIds.forEach(friendId => {
+                            const friendMsgs = msgsByFriend[friendId];
+                            const friend = friends.find(f => f.id === friendId);
+                            if (!friend || friend.isHidden) return;
+
+                            const item = document.createElement('div');
+                            item.className = 'chat-item';
+                            item.style.cursor = 'pointer';
+
+                            if (friendMsgs.length > 1) {
+                                item.innerHTML = `
+                                    <img class="chat-avatar" src="${friend.avatar}" alt="${friend.name}">
+                                    <div class="chat-info" style="justify-content: center;">
+                                        <span class="chat-name">${friend.name}</span>
+                                        <div class="chat-preview" style="color: #999; margin-top: 4px;">${friendMsgs.length}条相关的聊天记录</div>
+                                    </div>
+                                `;
+                                item.onclick = () => showInlineSearchDetails(friend.id, keyword);
+                            } else {
+                                const msg = friendMsgs[0];
+                                let previewText = msg.text.replace(/<[^>]+>/g, '');
+                                if (msg.isSticker && msg.stickerDescription) previewText = `[表情包] ${msg.stickerDescription}`;
+                                else if (msg.isSticker && msg.isDice) previewText = `[骰子]`;
+                                else if (msg.isSticker) previewText = `[表情包]`;
+                                else if (msg.isImage) previewText = `[图片]`;
+                                
+                                const regex = new RegExp(`(${keyword})`, 'gi');
+                                const highlightedText = previewText.replace(regex, '<span style="color:#07c160">$1</span>');
+
+                                const msgDate = new Date(msg.timestamp);
+                                const timeStr = `${msgDate.getMonth()+1}-${msgDate.getDate()}`;
+
+                                item.innerHTML = `
+                                    <img class="chat-avatar" src="${friend.avatar}" alt="${friend.name}">
+                                    <div class="chat-info">
+                                        <div class="chat-top">
+                                            <span class="chat-name">${friend.name}</span>
+                                            <span class="chat-time">${timeStr}</span>
+                                        </div>
+                                        <div class="chat-preview">${highlightedText}</div>
+                                    </div>
+                                `;
+                                item.onclick = () => openChat(friend.id, msg.id || msg.timestamp);
+                            }
+                            list.appendChild(item);
+                        });
+                    }
+                    
+                    if (matchedFriends.length === 0 && matchedMessages.length === 0) {
+                        list.innerHTML = '<div style="text-align:center; padding: 30px; color:#999; font-size:14px;">无搜索结果</div>';
+                    }
+                }
+            };
             });
         }
 
@@ -11362,19 +11402,28 @@
                     const actionsBtn = header.querySelector('.wechat-actions');
                     if (actionsBtn) actionsBtn.style.display = 'none';
                     
-                    dbGetAll('chat_history', history => {
-                        const friendHistory = history.filter(m => m.friendId === friendId);
-                        const matchedMessages = friendHistory.filter(msg => {
-                            if (msg.type === 'system' || !msg.text) return false;
-                            if (msg.isSticker && !msg.text.startsWith('http') && !msg.text.startsWith('data:')) {
-                                if (msg.text.toLowerCase().includes(keyword.toLowerCase())) return true;
-                            }
-                            if (msg.stickerDescription && msg.stickerDescription.toLowerCase().includes(keyword.toLowerCase())) return true;
-                            if (!msg.isSticker && !msg.isTransfer && msg.text.toLowerCase().includes(keyword.toLowerCase())) return true;
-                            return false;
-                        });
+                    const transaction = db.transaction(['chat_history'], 'readonly');
+                    const store = transaction.objectStore('chat_history');
+                    const index = store.index('friendId');
+                    const request = index.openCursor(IDBKeyRange.only(friendId), 'prev'); // Start from newest
+                    
+                    const matchedMessages = [];
 
-                        matchedMessages.sort((a, b) => b.timestamp - a.timestamp);
+                    request.onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (cursor) {
+                            const msg = cursor.value;
+                            if (msg.type !== 'system' && msg.text) {
+                                if (msg.isSticker && !msg.text.startsWith('http') && !msg.text.startsWith('data:')) {
+                                    if (msg.text.toLowerCase().includes(keyword.toLowerCase())) matchedMessages.push(msg);
+                                } else if (msg.stickerDescription && msg.stickerDescription.toLowerCase().includes(keyword.toLowerCase())) {
+                                    matchedMessages.push(msg);
+                                } else if (!msg.isSticker && !msg.isTransfer && msg.text.toLowerCase().includes(keyword.toLowerCase())) {
+                                    matchedMessages.push(msg);
+                                }
+                            }
+                            cursor.continue();
+                        } else {
 
                         matchedMessages.forEach(msg => {
                             const item = document.createElement('div');
@@ -11408,7 +11457,8 @@
                             item.onclick = () => openChat(friend.id, msg.id || msg.timestamp);
                             list.appendChild(item);
                         });
-                    });
+                        }
+                    };
                 });
             });
         }
@@ -12290,8 +12340,7 @@
             if (activeMessage) {
                 if (activeMessageSegment) {
                     showCustomConfirm('确定要删除这条片段吗？', () => {
-                        dbGetAll('chat_history', allMsgs => {
-                            const dbMsg = allMsgs.find(m => m.id === activeMessage.id || (m.friendId === activeMessage.friendId && m.timestamp === activeMessage.timestamp));
+                        dbGetMessage(activeMessage.id, activeMessage.friendId, activeMessage.timestamp, dbMsg => {
                             if (dbMsg) {
                                 let parts = parseOfflineMessage(dbMsg.text);
                                 parts.splice(activeMessageSegment.index, 1);
@@ -12318,8 +12367,7 @@
                     }, '删除片段');
                 } else {
                     showCustomConfirm('确定要删除这条消息吗？', () => {
-                        dbGetAll('chat_history', allMsgs => {
-                            const dbMsg = allMsgs.find(m => m.id === activeMessage.id || (m.friendId === activeMessage.friendId && m.timestamp === activeMessage.timestamp));
+                        dbGetMessage(activeMessage.id, activeMessage.friendId, activeMessage.timestamp, dbMsg => {
                             if (dbMsg) {
                                 dbDelete('chat_history', dbMsg.id, () => {
                                     if (dbMsg.isOfflineSeparate) {
@@ -12338,8 +12386,7 @@
 
         document.getElementById('msg-ctx-recall').addEventListener('click', () => {
             if (activeMessage) {
-                dbGetAll('chat_history', allMsgs => {
-                    const dbMsg = allMsgs.find(m => m.friendId === activeMessage.friendId && m.timestamp === activeMessage.timestamp);
+                dbGetMessage(activeMessage.id, activeMessage.friendId, activeMessage.timestamp, dbMsg => {
                     if (dbMsg) {
                         dbMsg.isRecalled = true;
                         dbMsg.text = '你撤回了一条消息'; 
@@ -12354,25 +12401,36 @@
 
         document.getElementById('msg-ctx-retry').addEventListener('click', () => {
             if (activeMessage) {
-                dbGetAll('chat_history', allMsgs => {
-                    const messagesToDelete = allMsgs.filter(m => m.friendId === activeMessage.friendId && m.timestamp >= activeMessage.timestamp);
-                    if (messagesToDelete.length > 0) {
-                        let deletedCount = 0;
-                        messagesToDelete.forEach(msg => {
-                            dbDelete('chat_history', msg.id, () => {
-                                deletedCount++;
-                                if (deletedCount === messagesToDelete.length) {
-                                    if (activeMessage.isOfflineSeparate) {
-                                        renderOfflineChat(activeMessage.friendId);
-                                    } else {
-                                        renderMessages(activeMessage.friendId);
+                const tx = db.transaction(['chat_history'], 'readwrite');
+                const store = tx.objectStore('chat_history');
+                const index = store.index('friendId');
+                const request = index.openCursor(IDBKeyRange.only(activeMessage.friendId), 'prev');
+                let messagesToDelete = [];
+                
+                request.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor && cursor.value.timestamp >= activeMessage.timestamp) {
+                        messagesToDelete.push(cursor.value);
+                        cursor.continue();
+                    } else {
+                        if (messagesToDelete.length > 0) {
+                            let deletedCount = 0;
+                            messagesToDelete.forEach(msg => {
+                                dbDelete('chat_history', msg.id, () => {
+                                    deletedCount++;
+                                    if (deletedCount === messagesToDelete.length) {
+                                        if (activeMessage.isOfflineSeparate) {
+                                            renderOfflineChat(activeMessage.friendId);
+                                        } else {
+                                            renderMessages(activeMessage.friendId);
+                                        }
+                                        triggerAIResponse();
                                     }
-                                    triggerAIResponse();
-                                }
+                                });
                             });
-                        });
+                        }
                     }
-                });
+                };
             }
             msgContextMenu.style.display = 'none';
         });
@@ -12412,8 +12470,7 @@
             if (lines.length === 0) return;
             
             if (activeMessage) {
-                dbGetAll('chat_history', allMsgs => {
-                    const dbMsg = allMsgs.find(m => (m.id && activeMessage.id && String(m.id) === String(activeMessage.id)) || (m.friendId === activeMessage.friendId && String(m.timestamp) === String(activeMessage.timestamp)));
+                dbGet('chat_history', activeMessage.id || activeMessage.timestamp, dbMsg => {
                     if (dbMsg) {
                         dbDelete('chat_history', dbMsg.id, () => {
                             const baseTime = dbMsg.timestamp;
@@ -12507,28 +12564,16 @@
 
             showCustomConfirm(`确定要删除选中的 ${selectedMessageIds.size} 条消息吗？`, () => {
                 const idsToDelete = Array.from(selectedMessageIds);
+                let deletedCount = 0;
                 
-                dbGetAll('chat_history', allMsgs => {
-                    const msgsToDelete = allMsgs.filter(m => {
-                        const mIdStr = String(m.id || m.timestamp);
-                        return idsToDelete.includes(mIdStr) && m.friendId === currentChatFriendId;
-                    });
-
-                    let deletedCount = 0;
-                    if (msgsToDelete.length === 0) {
-                        exitSelectionMode();
-                        return;
-                    }
-
-                    msgsToDelete.forEach(msg => {
-                        dbDelete('chat_history', msg.id, () => {
-                            deletedCount++;
-                            if (deletedCount === msgsToDelete.length) {
-                                showToast('删除成功');
-                                exitSelectionMode();
-                                renderMessages(currentChatFriendId);
-                            }
-                        });
+                idsToDelete.forEach(id => {
+                    dbDelete('chat_history', id, () => {
+                        deletedCount++;
+                        if (deletedCount === idsToDelete.length) {
+                            showToast('删除成功');
+                            exitSelectionMode();
+                            renderMessages(currentChatFriendId);
+                        }
                     });
                 });
             }, '删除消息');
@@ -12554,8 +12599,7 @@
                 return;
             }
             if (activeMessage) {
-                dbGetAll('chat_history', allMsgs => {
-                    const dbMsg = allMsgs.find(m => (m.id && activeMessage.id && String(m.id) === String(activeMessage.id)) || (m.friendId === activeMessage.friendId && String(m.timestamp) === String(activeMessage.timestamp)));
+                dbGet('chat_history', activeMessage.id || activeMessage.timestamp, dbMsg => {
                     if (dbMsg) {
                         if (activeMessageSegment) {
                             let parts = parseOfflineMessage(dbMsg.text);
@@ -14111,52 +14155,70 @@
             
             dbGet('friends', friendId, friend => {
                 currentChatFriend = friend;
-                dbGet('user_profile', 'main_user', async profile => {
+                dbGet('user_profile', 'main_user', profile => {
                     currentUserProfile = profile;
                     
-                    let previousScrollHeight = 0;
-                    let previousScrollTop = 0;
+                    const transaction = db.transaction(['chat_history'], 'readonly');
+                    const store = transaction.objectStore('chat_history');
+                    const index = store.index('friendId');
+                    const request = index.getAll(friendId);
 
-                    if (isLoadMore) {
-                        previousScrollHeight = container.scrollHeight;
-                        previousScrollTop = container.scrollTop;
-                        currentChatLoadedCount += CHAT_LOAD_LIMIT;
-                    } else {
-                        currentChatLoadedCount = CHAT_LOAD_LIMIT;
-                    }
+                    request.onsuccess = () => {
+                        let messages = request.result;
+                        messages = messages.filter(msg => !msg.isOfflineSeparate);
+                        
+                        let previousScrollHeight = 0;
+                        let previousScrollTop = 0;
 
-                    const {messages, hasMore, newLoadedCount} = await dbGetMessagesForUIPromise(friendId, false, targetMsgId, currentChatLoadedCount);
-                    if (targetMsgId) {
-                        currentChatLoadedCount = newLoadedCount;
-                    }
-
-                    container.innerHTML = '';
-                    lastMessageTimestamp = null;
-
-                    if (messages.length > 0) {
-                        messages.forEach(msg => addMessageToUI(msg, false));
-                    }
-                    
-                    if (isLoadMore) {
-                        container.scrollTop = container.scrollHeight - previousScrollHeight + previousScrollTop;
-                    } else if (targetMsgId) {
-                        // Slight delay to ensure DOM is ready
-                        setTimeout(() => {
-                            // Try finding by dataset
-                            let targetEl = document.querySelector(`.message-bubble-wrapper[data-msg-id="${targetMsgId}"]`);
-                            if (targetEl) {
-                                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        if (isLoadMore) {
+                            previousScrollHeight = container.scrollHeight;
+                            previousScrollTop = container.scrollTop;
+                            currentChatLoadedCount += CHAT_LOAD_LIMIT;
+                        } else {
+                            if (targetMsgId) {
+                                const targetIndex = messages.findIndex(m => String(m.id) === String(targetMsgId) || String(m.timestamp) === String(targetMsgId));
+                                if (targetIndex !== -1) {
+                                    const messagesAfterTarget = messages.length - targetIndex;
+                                    currentChatLoadedCount = Math.max(CHAT_LOAD_LIMIT, messagesAfterTarget + 10);
+                                } else {
+                                    currentChatLoadedCount = CHAT_LOAD_LIMIT;
+                                }
+                            } else {
+                                currentChatLoadedCount = CHAT_LOAD_LIMIT;
                             }
-                        }, 100);
-                    } else {
-                        container.scrollTop = container.scrollHeight;
-                    }
-
-                    container.onscroll = () => {
-                        if (container.scrollTop === 0 && hasMore) {
-                            container.onscroll = null;
-                            renderMessages(friendId, null, true);
                         }
+
+                        container.innerHTML = '';
+                        lastMessageTimestamp = null;
+
+                        const sliceStart = Math.max(0, messages.length - currentChatLoadedCount);
+                        const messagesToRender = messages.slice(sliceStart);
+
+                        if (messagesToRender.length > 0) {
+                            messagesToRender.forEach(msg => addMessageToUI(msg, false));
+                        }
+                        
+                        if (isLoadMore) {
+                            container.scrollTop = container.scrollHeight - previousScrollHeight + previousScrollTop;
+                        } else if (targetMsgId) {
+                            // Slight delay to ensure DOM is ready
+                            setTimeout(() => {
+                                // Try finding by dataset
+                                let targetEl = document.querySelector(`.message-bubble-wrapper[data-msg-id="${targetMsgId}"]`);
+                                if (targetEl) {
+                                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                            }, 100);
+                        } else {
+                            container.scrollTop = container.scrollHeight;
+                        }
+
+                        container.onscroll = () => {
+                            if (container.scrollTop === 0 && currentChatLoadedCount < messages.length) {
+                                container.onscroll = null;
+                                renderMessages(friendId, null, true);
+                            }
+                        };
                     };
                 });
             });
@@ -14320,32 +14382,25 @@
                         userPersona = await new Promise(resolve => dbGet('my_personas', friend.myPersonaId, resolve));
                     }
 
-                    // Fetch AI stickers (specific and global)
-                    const friendStickers = await new Promise(resolve => {
+                    // Fetch AI stickers (specific and global) - Light version to prevent OOM
+                    const fetchStickersLight = (fId) => new Promise(resolve => {
                         try {
                             const transaction = db.transaction(['ai_stickers'], 'readonly');
                             const store = transaction.objectStore('ai_stickers');
                             const index = store.index('friendId');
-                            const req = index.getAll(friend.id);
-                            req.onsuccess = () => resolve(req.result || []);
+                            const req = index.getAll(fId);
+                            req.onsuccess = () => {
+                                const res = req.result || [];
+                                resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                            };
                             req.onerror = () => resolve([]);
                         } catch(e) {
                             resolve([]);
                         }
                     });
 
-                    const globalStickers = await new Promise(resolve => {
-                        try {
-                            const transaction = db.transaction(['ai_stickers'], 'readonly');
-                            const store = transaction.objectStore('ai_stickers');
-                            const index = store.index('friendId');
-                            const req = index.getAll('global'); // Fetch global stickers
-                            req.onsuccess = () => resolve(req.result || []);
-                            req.onerror = () => resolve([]);
-                        } catch(e) {
-                            resolve([]);
-                        }
-                    });
+                    const friendStickers = await fetchStickersLight(friend.id);
+                    const globalStickers = await fetchStickersLight('global');
 
                     // Combine and remove duplicates, friend-specific ones take priority
                     const combinedStickers = [...friendStickers, ...globalStickers];
@@ -14376,38 +14431,44 @@
                             
                             // Inject Member's Stickers
                             const memberStickers = aiStickers.filter(s => s.friendId === member.id);
-                                if (memberStickers.length > 0) {
-                                    systemPrompt += `【${member.name}的专属表情包】（请在发言时通过 <sticker>表情包ID</sticker> 使用）：\n`;
-                                    memberStickers.forEach((sticker, index) => {
-                                        const desc = sticker.description ? ` (含义：${sticker.description})` : '';
-                                        systemPrompt += `${index + 1}. <sticker>${sticker.id}</sticker>${desc}\n`;
+                            if (memberStickers.length > 0) {
+                                systemPrompt += `【${member.name}的专属表情包】（请在发言时通过 <sticker>表情包ID</sticker> 使用）：\n`;
+                                memberStickers.forEach((sticker, index) => {
+                                    const desc = sticker.description ? ` (含义：${sticker.description})` : '';
+                                    systemPrompt += `${index + 1}. <sticker>${sticker.id}</sticker>${desc}\n`;
+                                });
+                            }
+
+                            // 记忆互通
+                            if (friend.memoryInterop && (friend.memoryInteropRoles || []).includes(member.id)) {
+                                // 注入长期记忆
+                                if (member.memories && member.memories.length > 0) {
+                                    systemPrompt += `[${member.name} 的长期记忆（记忆互通）]：\n`;
+                                    member.memories.forEach((mem, index) => {
+                                        systemPrompt += `${index + 1}. ${mem.content}\n`;
+                                    });
+                                    systemPrompt += `\n`;
+                                }
+
+                                const personalHistory = await new Promise(res => {
+                                    const tx = db.transaction(['chat_history'], 'readonly');
+                                    const store = tx.objectStore('chat_history');
+                                    const idx = store.index('friendId');
+                                    const req = idx.getAll(member.id);
+                                    req.onsuccess = () => res(req.result.slice(-10));
+                                });
+                                if (personalHistory.length > 0) {
+                                    systemPrompt += `[${member.name}最近与用户的私聊记忆（记忆互通）]：\n`;
+                                    personalHistory.forEach(m => {
+                                        const sender = m.type === 'sent' ? '用户' : member.name;
+                                        const txt = m.isSticker ? '[图片/表情]' : m.text;
+                                        systemPrompt += `${sender}: ${txt}\n`;
                                     });
                                 }
-
-                                // 记忆互通
-                                if (friend.memoryInterop && (friend.memoryInteropRoles || []).includes(member.id)) {
-                                    // 注入长期记忆
-                                    if (member.memories && member.memories.length > 0) {
-                                        systemPrompt += `[${member.name} 的长期记忆（记忆互通）]：\n`;
-                                        member.memories.forEach((mem, index) => {
-                                            systemPrompt += `${index + 1}. ${mem.content}\n`;
-                                        });
-                                        systemPrompt += `\n`;
-                                    }
-
-                                    const personalHistory = await dbGetRecentHistoryPromise(member.id, 10);
-                                    if (personalHistory.length > 0) {
-                                        systemPrompt += `[${member.name}最近与用户的私聊记忆（记忆互通）]：\n`;
-                                        personalHistory.forEach(m => {
-                                            const sender = m.type === 'sent' ? '用户' : member.name;
-                                            const txt = m.isSticker ? '[图片/表情]' : m.text;
-                                            systemPrompt += `${sender}: ${txt}\n`;
-                                        });
-                                    }
-                                }
                             }
-                            
-                            if (isOfflineMode) {
+                        }
+                        
+                        if (isOfflineMode) {
                             systemPrompt += `--- \n当前为【群聊线下模式】。请根据群聊当前的上下文，决定接下来由哪些群成员发言。为了还原真实的群聊氛围，你可以让多个不同角色互相附和、抢答，也可以让同一个角色连续发送多条消息。
 请严格按照以下格式输出成员的发言内容（每行代表一条独立的气泡，必须以成员名字开头，加英文冒号）：
 角色A的名字: 「他说的话」<thought>他心里的想法</thought>
@@ -14440,7 +14501,9 @@
                         if (relevantGroups.length > 0) {
                             let groupHistoryText = "";
                             for (const group of relevantGroups) {
-                                const groupHistory = await dbGetRecentHistoryPromise(group.id, 10);
+                                const groupHistory = await new Promise(res => {
+                                    dbGetRecentHistory(group.id, 10, res);
+                                });
                                 if (groupHistory.length > 0) {
                                     groupHistoryText += `\n[群聊：${group.name} 的最近记忆]：\n`;
                                     groupHistory.forEach(msg => {
@@ -14457,10 +14520,13 @@
                     }
 
                     const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
-                    
-                    let history = await dbGetRecentHistoryPromise(targetFriendId, shortTermCount);
+
+                    let history = await new Promise(resolve => {
+                        dbGetRecentHistory(targetFriendId, shortTermCount, resolve);
+                    });
                     
                     if (friend.isGroup) {
+                        // 将群聊记录包装成 LLM 容易理解的格式
                         history = history.map(msg => {
                             if (msg.type === 'system') return msg;
                             const sender = msg.type === 'sent' ? '用户' : (msg.senderName || '未知成员');
@@ -14469,23 +14535,25 @@
                         });
                     }
 
-                    if (isContinue) {
-                        const isOfflineMode = friend.offlineSettings && friend.offlineSettings.enabled;
-                        const continuePrompt = isOfflineMode 
-                            ? "【系统提示】请你继续推进当前的剧情和场景，顺着之前的话题往下说，注意遵守线下模式的格式要求。"
-                            : "【系统提示】请你继续发消息补充你想说的话，顺着之前的话题往下说，保持微信聊天的格式。";
-                        history.push({
-                            type: 'system',
-                            text: continuePrompt,
-                            timestamp: Date.now()
-                        });
-                    } else if (!(friend.offlineSettings && friend.offlineSettings.enabled)) {
-                        history.push({
-                            type: 'system',
-                            text: "【系统强制指令】当前是【微信线上聊天模式】！\n1. 严禁使用「」引号包裹对话。\n2. 严禁发送任何背景旁白、动作描写或心理活动。\n3. 【最重要：强制拆分】只要你的回复包含多句话，就必须使用换行符将其拆分为多行！严禁回复一整段不换行的长文！必须像微信打字一样碎片化发送！",
-                            timestamp: Date.now()
-                        });
-                    }
+                    const processAIResponse = async () => {
+
+                        if (isContinue) {
+                            const isOfflineMode = friend.offlineSettings && friend.offlineSettings.enabled;
+                            const continuePrompt = isOfflineMode 
+                                ? "【系统提示】请你继续推进当前的剧情和场景，顺着之前的话题往下说，注意遵守线下模式的格式要求。"
+                                : "【系统提示】请你继续发消息补充你想说的话，顺着之前的话题往下说，保持微信聊天的格式。";
+                            history.push({
+                                type: 'system',
+                                text: continuePrompt,
+                                timestamp: Date.now()
+                            });
+                        } else if (!(friend.offlineSettings && friend.offlineSettings.enabled)) {
+                            history.push({
+                                type: 'system',
+                                text: "【系统强制指令】当前是【微信线上聊天模式】！\n1. 严禁使用「」引号包裹对话。\n2. 严禁发送任何背景旁白、动作描写或心理活动。\n3. 【最重要：强制拆分】只要你的回复包含多句话，就必须使用换行符将其拆分为多行！严禁回复一整段不换行的长文！必须像微信打字一样碎片化发送！",
+                                timestamp: Date.now()
+                            });
+                        }
 
                     try {
                         let aiResponseText = await callLLM(config, systemPrompt, history);
@@ -15180,14 +15248,17 @@
                                     }
 
                                     if (i < msgParts.length - 1) {
-                                        showTypingIndicator(friend.id);
-                                        const delay = Math.min(Math.max(msgParts[i+1].length * 100, 1000), 3000);
+                                        if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) {
+                                            showTypingIndicator(friend.id);
+                                        }
+                                        const delay = Math.min(Math.max(msgParts[i+1].length * 100, 800), 3000);
                                         await new Promise(res => setTimeout(res, delay));
+                                        if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) {
+                                            hideTypingIndicator(friend.id);
+                                        }
                                     }
                                 }
                             }
-                        } else {
-                            hideTypingIndicator(friend.id);
                         }
                     } catch (apiError) {
                         console.error(apiError);
@@ -15197,6 +15268,9 @@
                         isAITyping = false;
                         voiceIcon.style.opacity = '1';
                     }
+                    }; // end of processAIResponse
+
+                    processAIResponse();
             });
         } catch (e) {
             isAITyping = false;
@@ -15824,61 +15898,6 @@
         voiceIcon.addEventListener('touchmove', cancelVoicePress);
         voiceIcon.addEventListener('click', handleVoiceClick);
 
-        function dbGetMessagesForUIPromise(friendId, isOffline, targetMsgId, limit) {
-            return new Promise(resolve => {
-                if (!db) return resolve({messages: [], hasMore: false, newLoadedCount: 0});
-                const transaction = db.transaction(['chat_history'], 'readonly');
-                const store = transaction.objectStore('chat_history');
-                const index = store.index('friendId');
-                const request = index.openCursor(IDBKeyRange.only(friendId), 'prev');
-                const results = [];
-                let foundTarget = false;
-                let extraCount = 0;
-                
-                request.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (cursor) {
-                        const msg = cursor.value;
-                        const matchOffline = isOffline ? msg.isOfflineSeparate : !msg.isOfflineSeparate;
-                        
-                        if (matchOffline) {
-                            results.push(msg);
-                            if (targetMsgId && !foundTarget && (String(msg.id) === String(targetMsgId) || String(msg.timestamp) === String(targetMsgId))) {
-                                foundTarget = true;
-                            }
-                            if (foundTarget) {
-                                extraCount++;
-                            }
-                        }
-                        
-                        let shouldStop = false;
-                        if (targetMsgId) {
-                            if (foundTarget && extraCount >= 10) shouldStop = true;
-                        } else {
-                            if (results.length >= limit) shouldStop = true;
-                        }
-                        
-                        if (shouldStop) {
-                            resolve({
-                                messages: results.reverse(), 
-                                hasMore: true, 
-                                newLoadedCount: results.length
-                            });
-                        } else {
-                            cursor.continue();
-                        }
-                    } else {
-                        resolve({
-                            messages: results.reverse(), 
-                            hasMore: false, 
-                            newLoadedCount: results.length
-                        });
-                    }
-                };
-                request.onerror = () => resolve({messages: [], hasMore: false, newLoadedCount: 0});
-            });
-        }
-
         function checkActiveChats() {
             const configStr = localStorage.getItem('globalConfig');
             if (!configStr) return;
@@ -15886,20 +15905,27 @@
             if (!config.apiKey || !config.model) return;
 
             dbGetAll('friends', friends => {
-                friends.forEach(async friend => {
+                friends.forEach(friend => {
                     if (friend.activeChat && friend.messageInterval) {
                         const intervalMs = parseInt(friend.messageInterval) * 60 * 1000;
                         if (intervalMs <= 0) return;
 
-                        const lastMsg = await dbGetLastMessagePromise(friend.id);
-                        let lastTs = 0;
-                        if (lastMsg) {
-                            lastTs = lastMsg.timestamp;
-                        }
-                        
-                        if (Date.now() - lastTs >= intervalMs) {
-                            generateProactiveMessage(friend, config);
-                        }
+                        const transaction = db.transaction(['chat_history'], 'readonly');
+                        const store = transaction.objectStore('chat_history');
+                        const index = store.index('friendId');
+                        const request = index.getAll(friend.id);
+
+                        request.onsuccess = () => {
+                            const history = request.result;
+                            let lastTs = 0;
+                            if (history.length > 0) {
+                                lastTs = history[history.length - 1].timestamp;
+                            }
+                            
+                            if (Date.now() - lastTs >= intervalMs) {
+                                generateProactiveMessage(friend, config);
+                            }
+                        };
                     }
                 });
             });
@@ -15919,7 +15945,10 @@
                         const store = transaction.objectStore('ai_stickers');
                         const index = store.index('friendId');
                         const req = index.getAll(friend.id);
-                        req.onsuccess = () => resolve(req.result);
+                        req.onsuccess = () => {
+                            const res = req.result || [];
+                            resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                        };
                         req.onerror = () => resolve([]);
                     } catch(e) {
                         resolve([]);
@@ -15936,16 +15965,11 @@
                 const systemPrompt = buildSystemPrompt(friend, userPersona, aiStickers, visiblePosts) + "\n【系统提示】对方已经有一段时间没说话了，请你主动找个话题开启聊天。不要显得生硬，自然一点。";
                 const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
 
-                const transaction = db.transaction(['chat_history'], 'readonly');
-                const store = transaction.objectStore('chat_history');
-                const index = store.index('friendId');
-                const request = index.getAll(friend.id);
+                let history = await new Promise(resolve => {
+                    dbGetRecentHistory(friend.id, shortTermCount, resolve);
+                });
 
-                request.onsuccess = async () => {
-                    let history = request.result;
-                    history = history.slice(-shortTermCount);
-
-                    try {
+                try {
                         let aiResponseText = await callLLM(config, systemPrompt, history);
 
                         if (aiResponseText) {
@@ -16401,7 +16425,6 @@
                     } catch (apiError) {
                         console.error('Proactive chat error for', friend.name, apiError);
                     }
-                };
             } catch (e) {
                 console.error(e);
             }
@@ -16409,56 +16432,52 @@
 
         const summarizingFriends = new Set();
 
-        function runAutoSummarization() {
+        async function runAutoSummarization() {
             const configStr = localStorage.getItem('globalConfig');
             if (!configStr) return;
             const config = JSON.parse(configStr);
             if (!config.apiKey || !config.model) return;
 
-            dbGetAll('friends', friends => {
-                friends.forEach(friend => {
+            dbGetAll('friends', async friends => {
+                for (let i = 0; i < friends.length; i++) {
+                    const friend = friends[i];
                     if (friend.autoSummarizeMemory && !friend.isGroup) {
                         const groupIds = friends.filter(f => f.isGroup && f.memoryInterop && (f.memoryInteropRoles || []).includes(friend.id)).map(f => f.id);
                         const allRelevantIds = [friend.id, ...groupIds];
                         
-                        // Fetch unsummarized messages using cursor
-                        const fetchUnsummarized = () => {
-                            return new Promise(resolve => {
-                                const unsummarized = [];
+                        let unsummarized = [];
+                        for(let j = 0; j < allRelevantIds.length; j++) {
+                            const fId = allRelevantIds[j];
+                            const msgs = await new Promise(resolve => {
                                 const tx = db.transaction(['chat_history'], 'readonly');
                                 const store = tx.objectStore('chat_history');
-                                const request = store.openCursor();
-                                
+                                const index = store.index('friendId');
+                                const request = index.openCursor(IDBKeyRange.only(fId));
+                                let result = [];
                                 request.onsuccess = (e) => {
                                     const cursor = e.target.result;
                                     if (cursor) {
-                                        const msg = cursor.value;
-                                        if (allRelevantIds.includes(msg.friendId)) {
-                                            let needsSummary = true;
-                                            if (msg.summarizedBy && msg.summarizedBy.includes(friend.id)) needsSummary = false;
-                                            if (msg.friendId === friend.id && msg.isSummarized) needsSummary = false;
-                                            
-                                            if (needsSummary) {
-                                                unsummarized.push(msg);
-                                            }
+                                        const m = cursor.value;
+                                        if (!m.isSummarized && !(m.summarizedBy && m.summarizedBy.includes(friend.id))) {
+                                            result.push(m);
                                         }
                                         cursor.continue();
                                     } else {
-                                        // Sort ascending by timestamp
-                                        unsummarized.sort((a, b) => a.timestamp - b.timestamp);
-                                        resolve(unsummarized);
+                                        resolve(result);
                                     }
                                 };
                             });
-                        };
-
-                        fetchUnsummarized().then(unsummarized => {
-                            const CHUNK_SIZE = parseInt(friend.summarizeInterval || '20', 10);
-                            if (unsummarized.length >= CHUNK_SIZE) {
-                                if (summarizingFriends.has(friend.id)) return;
-                                summarizingFriends.add(friend.id);
-                                
-                                const toSummarize = unsummarized.slice(0, CHUNK_SIZE);
+                            unsummarized = unsummarized.concat(msgs);
+                        }
+                        
+                        unsummarized.sort((a, b) => a.timestamp - b.timestamp);
+                        
+                        const CHUNK_SIZE = parseInt(friend.summarizeInterval || '20', 10);
+                        if (unsummarized.length >= CHUNK_SIZE) {
+                            if (summarizingFriends.has(friend.id)) continue;
+                            summarizingFriends.add(friend.id);
+                            
+                            const toSummarize = unsummarized.slice(0, CHUNK_SIZE);
                                 
                                 let historyText = toSummarize.map(msg => {
                                     const date = new Date(msg.timestamp);
@@ -16542,9 +16561,8 @@ ${historyText}`;
                                         summarizingFriends.delete(friend.id);
                                     });
                             }
-                        }
-                    });
-                });
+                    }
+                }
             });
         }
 
@@ -18725,49 +18743,67 @@ ${historyText}`;
         function renderOfflineChat(friendId, isLoadMore = false, targetMsgId = null) {
             const container = document.getElementById('offline-chat-messages');
             
-            dbGet('friends', friendId, async friend => {
-                let previousScrollHeight = 0;
-                let previousScrollTop = 0;
+            const transaction = db.transaction(['chat_history'], 'readonly');
+            const store = transaction.objectStore('chat_history');
+            const index = store.index('friendId');
+            const request = index.getAll(friendId);
 
-                if (isLoadMore) {
-                    previousScrollHeight = container.scrollHeight;
-                    previousScrollTop = container.scrollTop;
-                    currentOfflineLoadedCount += CHAT_LOAD_LIMIT;
-                } else {
-                    currentOfflineLoadedCount = CHAT_LOAD_LIMIT;
-                }
-
-                const {messages, hasMore, newLoadedCount} = await dbGetMessagesForUIPromise(friendId, true, targetMsgId, currentOfflineLoadedCount);
-                if (targetMsgId) {
-                    currentOfflineLoadedCount = newLoadedCount;
-                }
-
-                container.innerHTML = '';
-
-                if (messages.length > 0) {
-                    messages.forEach(msg => appendOfflineMessage(msg, friend, false, false));
-                }
+            request.onsuccess = () => {
+                let messages = request.result;
+                messages = messages.filter(msg => msg.isOfflineSeparate);
                 
-                if (isLoadMore) {
-                    container.scrollTop = container.scrollHeight - previousScrollHeight + previousScrollTop;
-                } else if (targetMsgId) {
-                    setTimeout(() => {
-                        let targetEl = document.querySelector(`.offline-message-row[data-msg-id="${targetMsgId}"]`);
-                        if (targetEl) {
-                            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }, 100);
-                } else {
-                    container.scrollTop = container.scrollHeight;
-                }
+                dbGet('friends', friendId, friend => {
+                    let previousScrollHeight = 0;
+                    let previousScrollTop = 0;
 
-                container.onscroll = () => {
-                    if (container.scrollTop === 0 && hasMore) {
-                        container.onscroll = null;
-                        renderOfflineChat(friendId, true);
+                    if (isLoadMore) {
+                        previousScrollHeight = container.scrollHeight;
+                        previousScrollTop = container.scrollTop;
+                        currentOfflineLoadedCount += CHAT_LOAD_LIMIT;
+                    } else {
+                        if (targetMsgId) {
+                            const targetIndex = messages.findIndex(m => String(m.id) === String(targetMsgId) || String(m.timestamp) === String(targetMsgId));
+                            if (targetIndex !== -1) {
+                                const messagesAfterTarget = messages.length - targetIndex;
+                                currentOfflineLoadedCount = Math.max(CHAT_LOAD_LIMIT, messagesAfterTarget + 10);
+                            } else {
+                                currentOfflineLoadedCount = CHAT_LOAD_LIMIT;
+                            }
+                        } else {
+                            currentOfflineLoadedCount = CHAT_LOAD_LIMIT;
+                        }
                     }
-                };
-            });
+
+                    container.innerHTML = '';
+
+                    const sliceStart = Math.max(0, messages.length - currentOfflineLoadedCount);
+                    const messagesToRender = messages.slice(sliceStart);
+
+                    if (messagesToRender.length > 0) {
+                        messagesToRender.forEach(msg => appendOfflineMessage(msg, friend, false, false));
+                    }
+                    
+                    if (isLoadMore) {
+                        container.scrollTop = container.scrollHeight - previousScrollHeight + previousScrollTop;
+                    } else if (targetMsgId) {
+                        setTimeout(() => {
+                            let targetEl = document.querySelector(`.offline-message-row[data-msg-id="${targetMsgId}"]`);
+                            if (targetEl) {
+                                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 100);
+                    } else {
+                        container.scrollTop = container.scrollHeight;
+                    }
+
+                    container.onscroll = () => {
+                        if (container.scrollTop === 0 && currentOfflineLoadedCount < messages.length) {
+                            container.onscroll = null;
+                            renderOfflineChat(friendId, true);
+                        }
+                    };
+                });
+            };
         }
 
         async function appendOfflineMessage(msg, friend, shouldScroll = true, isNew = false) {
@@ -19929,8 +19965,7 @@ ${historyText}`;
             msgToUpdate.transferStatus = action;
 
             // Update in DB
-            dbGetAll('chat_history', allMsgs => {
-                const dbMsg = allMsgs.find(m => m.friendId === msgToUpdate.friendId && m.timestamp === msgToUpdate.timestamp);
+            dbGetMessage(msgToUpdate.id, msgToUpdate.friendId, msgToUpdate.timestamp, dbMsg => {
                 if (dbMsg) {
                     dbMsg.transferStatus = action;
                     dbUpdate('chat_history', dbMsg, () => {
@@ -21330,12 +21365,19 @@ ${historyText}`;
                     }
 
                     const aiStickers = await new Promise(resolve => {
-                        const tx = db.transaction(['ai_stickers'], 'readonly');
-                        const store = tx.objectStore('ai_stickers');
-                        const index = store.index('friendId');
-                        const req = index.getAll(friend.id);
-                        req.onsuccess = () => resolve(req.result);
-                        req.onerror = () => resolve([]);
+                        try {
+                            const tx = db.transaction(['ai_stickers'], 'readonly');
+                            const store = tx.objectStore('ai_stickers');
+                            const index = store.index('friendId');
+                            const req = index.getAll(friend.id);
+                            req.onsuccess = () => {
+                                const res = req.result || [];
+                                resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                            };
+                            req.onerror = () => resolve([]);
+                        } catch(e) {
+                            resolve([]);
+                        }
                     });
 
                     let prompt = buildSystemPrompt(friend, userPersona, aiStickers, []);
