@@ -21727,14 +21727,13 @@ ${historyText}`;
                 return;
             }
 
-            if (currentTiebaPostRoleId === 'main_user') {
-                dbGet('user_profile', 'main_user', profile => {
-                    const authorName = profile && profile.name ? profile.name : '我';
-                    const authorAvatar = profile && profile.avatar ? profile.avatar : 'https://via.placeholder.com/150/B5EAD7/ffffff?text=Me';
+            dbGet('user_profile', 'main_user', profile => {
+                const authorAvatar = profile && profile.avatar ? profile.avatar : 'https://via.placeholder.com/150/B5EAD7/ffffff?text=Me';
 
+                const createPost = (authorName, authorId) => {
                     const post = {
                         id: Date.now().toString(),
-                        authorId: 'main_user',
+                        authorId: authorId,
                         authorName: authorName,
                         authorAvatar: authorAvatar,
                         content: content,
@@ -21753,37 +21752,21 @@ ${historyText}`;
                         switchTiebaTab('推荐');
                         triggerBotInteractionsForTiebaPost(post.id);
                     });
-                });
-            } else {
-                dbGet('friends', currentTiebaPostRoleId, async friend => {
-                    if (friend) {
-                        const publishBtn = document.querySelector('.tieba-header-right button');
-                        if (publishBtn) {
-                            publishBtn.disabled = true;
-                            publishBtn.textContent = '生成中...';
+                };
+
+                if (currentTiebaPostRoleId === 'main_user') {
+                    const authorName = profile && profile.name ? profile.name : '我';
+                    createPost(authorName, 'main_user');
+                } else {
+                    dbGet('my_personas', currentTiebaPostRoleId, persona => {
+                        if (persona) {
+                            createPost(persona.name, persona.id);
+                        } else {
+                            createPost('我', 'main_user');
                         }
-                        
-                        const configStr = localStorage.getItem('globalConfig');
-                        const config = configStr ? JSON.parse(configStr) : {};
-                        
-                        try {
-                            await generateTiebaPostForCharacter(friend, config, content);
-                            input.value = '';
-                            showToast(`${friend.name} 发帖成功`);
-                            switchTiebaFooterTab('home');
-                            switchTiebaTab('关注');
-                        } catch (e) {
-                            console.error(`Error generating tieba post for ${friend.name}:`, e);
-                            showToast('生成失败，请重试');
-                        } finally {
-                            if (publishBtn) {
-                                publishBtn.disabled = false;
-                                publishBtn.textContent = '发布';
-                            }
-                        }
-                    }
-                });
-            }
+                    });
+                }
+            });
         }
 
         let currentTiebaPostRoleId = 'main_user';
@@ -21796,27 +21779,28 @@ ${historyText}`;
             // Add 'Me' option
             const meLabel = document.createElement('label');
             meLabel.className = 'gm-contact-item';
+            meLabel.style.padding = '10px 0';
+            meLabel.style.borderBottom = '1px solid #f0f0f0';
             meLabel.innerHTML = `
-                <input type="radio" name="tieba-post-role-radio" value="main_user" ${currentTiebaPostRoleId === 'main_user' ? 'checked' : ''} data-name="我 (User)">
+                <input type="radio" name="tieba-post-role-radio" value="main_user" ${currentTiebaPostRoleId === 'main_user' ? 'checked' : ''} data-name="默认人设 (我)">
                 <div class="round-checkbox"><div class="inner-dot"></div></div>
                 <img src="https://via.placeholder.com/150/B5EAD7/ffffff?text=Me" style="width: 36px; height: 36px; border-radius: 4px; margin-left: 10px; object-fit: cover;">
-                <span>我 (User)</span>
+                <span>默认人设 (我)</span>
             `;
             list.appendChild(meLabel);
 
-            dbGetAll('friends', friends => {
-                const nonGroupFriends = friends.filter(f => !f.isGroup);
-                nonGroupFriends.forEach(friend => {
+            dbGetAll('my_personas', personas => {
+                personas.forEach(persona => {
                     const label = document.createElement('label');
                     label.className = 'gm-contact-item';
                     label.style.padding = '10px 0';
                     label.style.borderBottom = '1px solid #f0f0f0';
                     
                     label.innerHTML = `
-                        <input type="radio" name="tieba-post-role-radio" value="${friend.id}" ${currentTiebaPostRoleId === friend.id ? 'checked' : ''} data-name="${friend.name}">
+                        <input type="radio" name="tieba-post-role-radio" value="${persona.id}" ${currentTiebaPostRoleId === persona.id ? 'checked' : ''} data-name="${persona.name}">
                         <div class="round-checkbox"><div class="inner-dot"></div></div>
-                        <img src="${friend.avatar}" style="width: 36px; height: 36px; border-radius: 4px; margin-left: 10px; object-fit: cover;">
-                        <span>${friend.name}</span>
+                        <div style="width: 36px; height: 36px; border-radius: 4px; margin-left: 10px; background-color: #eb7350; color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">设</div>
+                        <span>${persona.name}</span>
                     `;
                     list.appendChild(label);
                 });
@@ -21837,11 +21821,7 @@ ${historyText}`;
                 document.getElementById('tieba-post-role-name').textContent = currentTiebaPostRoleName;
                 
                 const input = document.getElementById('tieba-post-input');
-                if (currentTiebaPostRoleId === 'main_user') {
-                    input.placeholder = '分享你的新鲜事...';
-                } else {
-                    input.placeholder = `以 ${currentTiebaPostRoleName} 的身份提供大致的发帖内容或思路...（例如：吐槽一下今天的天气，或者分享刚刚吃的美食）`;
-                }
+                input.placeholder = '分享你的新鲜事...';
             }
             closeTiebaRoleSelectModal();
         }
@@ -22284,66 +22264,80 @@ ${roleContext}
             if (!text || !currentTiebaPostId) return;
 
             dbGet('user_profile', 'main_user', profile => {
-                const myName = profile && profile.name ? profile.name : '我';
                 const myAvatar = profile && profile.avatar ? profile.avatar : 'https://via.placeholder.com/150/B5EAD7/ffffff?text=Me';
 
-                dbGet('tieba_posts', currentTiebaPostId, post => {
-                    if (post) {
-                        if (currentTiebaReplyCommentId) {
-                            const comment = post.tiebaComments.find(c => String(c.id) === String(currentTiebaReplyCommentId));
-                            if (comment) {
-                                if (!comment.subComments) comment.subComments = [];
-                                comment.subComments.push({
-                                    name: myName,
+                const addCommentWithRole = (roleName) => {
+                    dbGet('tieba_posts', currentTiebaPostId, post => {
+                        if (post) {
+                            if (currentTiebaReplyCommentId) {
+                                const comment = post.tiebaComments.find(c => String(c.id) === String(currentTiebaReplyCommentId));
+                                if (comment) {
+                                    if (!comment.subComments) comment.subComments = [];
+                                    comment.subComments.push({
+                                        name: roleName,
+                                        content: text,
+                                        replyTo: currentTiebaReplyToName || null
+                                    });
+                                    comment.comments = (comment.comments || 0) + 1;
+                                    post.comments = (post.comments || 0) + 1;
+                                }
+                            } else {
+                                if (!post.tiebaComments) post.tiebaComments = [];
+                                post.tiebaComments.push({
+                                    id: Date.now().toString(),
+                                    name: roleName,
+                                    avatar: myAvatar,
                                     content: text,
-                                    replyTo: currentTiebaReplyToName || null
+                                    timestamp: Date.now(),
+                                    reposts: 0,
+                                    comments: 0,
+                                    likes: 0,
+                                    subComments: []
                                 });
-                                comment.comments = (comment.comments || 0) + 1;
                                 post.comments = (post.comments || 0) + 1;
                             }
-                        } else {
-                            if (!post.tiebaComments) post.tiebaComments = [];
-                            post.tiebaComments.push({
-                                id: Date.now().toString(),
-                                name: myName,
-                                avatar: myAvatar,
-                                content: text,
-                                timestamp: Date.now(),
-                                reposts: 0,
-                                comments: 0,
-                                likes: 0,
-                                subComments: []
+                            
+                            dbUpdate('tieba_posts', post, () => {
+                                const isReplyToComment = !!currentTiebaReplyCommentId;
+                                
+                                let targetCommentId = currentTiebaReplyCommentId;
+                                if (!targetCommentId && post.tiebaComments && post.tiebaComments.length > 0) {
+                                    targetCommentId = post.tiebaComments[post.tiebaComments.length - 1].id;
+                                }
+                                
+                                input.value = '';
+                                input.placeholder = '发评论...';
+                                currentTiebaReplyCommentId = null;
+                                currentTiebaReplyToName = null;
+                                if (typeof resetTiebaDetailInputState === 'function') resetTiebaDetailInputState();
+                                document.getElementById('tieba-detail-comments-num').textContent = post.comments;
+                                renderTiebaCommentsList(post);
+                                const page = document.getElementById('tieba-post-detail-page');
+                                const contentArea = page.querySelector('.tieba-content');
+                                if (contentArea && !isReplyToComment) {
+                                    setTimeout(() => {
+                                        contentArea.scrollTop = contentArea.scrollHeight;
+                                    }, 50);
+                                }
+                                
+                                generateTiebaAIReplies(post.id, targetCommentId, isReplyToComment);
                             });
-                            post.comments = (post.comments || 0) + 1;
                         }
-                        
-                        dbUpdate('tieba_posts', post, () => {
-                            const isReplyToComment = !!currentTiebaReplyCommentId;
-                            
-                            let targetCommentId = currentTiebaReplyCommentId;
-                            if (!targetCommentId && post.tiebaComments && post.tiebaComments.length > 0) {
-                                targetCommentId = post.tiebaComments[post.tiebaComments.length - 1].id;
-                            }
-                            
-                            input.value = '';
-                            input.placeholder = '发评论...';
-                            currentTiebaReplyCommentId = null;
-                            currentTiebaReplyToName = null;
-                            if (typeof resetTiebaDetailInputState === 'function') resetTiebaDetailInputState();
-                            document.getElementById('tieba-detail-comments-num').textContent = post.comments;
-                            renderTiebaCommentsList(post);
-                            const page = document.getElementById('tieba-post-detail-page');
-                            const contentArea = page.querySelector('.tieba-content');
-                            if (contentArea && !isReplyToComment) {
-                                setTimeout(() => {
-                                    contentArea.scrollTop = contentArea.scrollHeight;
-                                }, 50);
-                            }
-                            
-                            generateTiebaAIReplies(post.id, targetCommentId, isReplyToComment);
-                        });
-                    }
-                });
+                    });
+                };
+
+                if (currentTiebaPostRoleId === 'main_user') {
+                    const myName = profile && profile.name ? profile.name : '我';
+                    addCommentWithRole(myName);
+                } else {
+                    dbGet('my_personas', currentTiebaPostRoleId, persona => {
+                        if (persona) {
+                            addCommentWithRole(persona.name);
+                        } else {
+                            addCommentWithRole('我');
+                        }
+                    });
+                }
             });
         }
 
@@ -22474,7 +22468,20 @@ ${roleContext}
                         userPersona = await new Promise(resolve => dbGet('my_personas', friend.myPersonaId, resolve));
                     }
 
-                    let prompt = buildSystemPrompt(friend, userPersona, [], [], false);
+                    // Determine if the poster is "Me" and if the persona matches
+                    let isPosterRecognized = false;
+                    if (post.authorId === 'main_user') {
+                         if (!friend.myPersonaId) {
+                             isPosterRecognized = true; // default matching
+                         }
+                    } else {
+                         if (friend.myPersonaId === post.authorId) {
+                             isPosterRecognized = true;
+                         }
+                    }
+
+                    // Build prompt without user persona if they shouldn't recognize each other
+                    let prompt = buildSystemPrompt(friend, isPosterRecognized ? userPersona : null, [], [], false);
                     
                     const savedWbStr = localStorage.getItem('tieba_bound_worldbooks');
                     if (savedWbStr) {
@@ -22489,20 +22496,23 @@ ${roleContext}
                         } catch(e) {}
                     }
 
-                    const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
-                    const recentHistory = await new Promise(res => {
-                        dbGetRecentHistory(friend.id, shortTermCount, res);
-                    });
+                    if (isPosterRecognized) {
+                        const shortTermCount = parseInt(friend.shortTermMemory || '20', 10);
+                        const recentHistory = await new Promise(res => {
+                            dbGetRecentHistory(friend.id, shortTermCount, res);
+                        });
 
-                    let chatContextStr = "【与用户的最近私聊记忆】\n";
-                    if (recentHistory.length === 0) chatContextStr += "无\n";
-                    recentHistory.forEach(m => {
-                        const sender = m.type === 'sent' ? '用户' : friend.realName;
-                        chatContextStr += `${sender}: ${m.isSticker ? '[图片/表情]' : m.text}\n`;
-                    });
-                    prompt += `\n${chatContextStr}\n`;
-
-                    prompt += `\n【当前场景：你在论坛/贴吧上看到“${post.authorName}”发了一条新帖子】\n帖子内容：${post.content}\n`;
+                        let chatContextStr = "【与用户的最近私聊记忆】\n";
+                        if (recentHistory.length === 0) chatContextStr += "无\n";
+                        recentHistory.forEach(m => {
+                            const sender = m.type === 'sent' ? '用户' : friend.realName;
+                            chatContextStr += `${sender}: ${m.isSticker ? '[图片/表情]' : m.text}\n`;
+                        });
+                        prompt += `\n${chatContextStr}\n`;
+                        prompt += `\n【当前场景：你在论坛/贴吧上看到你认识的用户“${post.authorName}”发了一条新帖子】\n帖子内容：${post.content}\n`;
+                    } else {
+                        prompt += `\n【当前场景：你在论坛/贴吧上看到一个名叫“${post.authorName}”的陌生网友发了一条新帖子】\n帖子内容：${post.content}\n重要提示：发帖人是你完全不认识的陌生网友，你必须以对待陌生人的口吻进行回复，不要表现出认识对方。`;
+                    }
                     
                     // 检查已经有哪些评论
                     const latestPost = await new Promise(res => dbGet('tieba_posts', postId, res));
@@ -22516,7 +22526,7 @@ ${roleContext}
                     }
                     prompt += commentPrompt;
 
-                    prompt += `\n【你的任务】\n结合你们的聊天记忆和你的人设，给这个帖子发表一条简短的评论。要求：\n1. 语气符合网民，并且绝不脱离你的人设(不能OOC)。如果发帖人是你认识的用户，可以直接跟他互动！\n2. 绝不能暴露你是AI。\n3. 直接输出评论内容，不需要其他任何多余格式或JSON！\n4. 长度10-50字左右，口语化。`;
+                    prompt += `\n【你的任务】\n结合你的身份设定，给这个帖子发表一条简短的评论。要求：\n1. 语气符合网民，并且绝不脱离你的人设(不能OOC)。${isPosterRecognized ? '因为发帖人是你认识的用户，可以直接跟他互动！' : '因为发帖人是陌生网友，一定要以对待陌生人的口吻去回复，严禁显得自来熟或认识对方！'}\n2. 绝不能暴露你是AI。\n3. 直接输出评论内容，不需要其他任何多余格式或JSON！\n4. 长度10-50字左右，口语化。`;
 
                     try {
                         let aiResponseText = await callLLM(config, prompt, [{ type: 'sent', text: "请直接输出你的评论文本。" }]);
@@ -22587,22 +22597,31 @@ ${roleContext}
                 });
             }
 
+            let myName = '我';
+            if (currentTiebaPostRoleId === 'main_user') {
+                const profile = await new Promise(res => dbGet('user_profile', 'main_user', res));
+                if (profile && profile.name) myName = profile.name;
+            } else {
+                 const persona = await new Promise(res => dbGet('my_personas', currentTiebaPostRoleId, res));
+                 if (persona) myName = persona.name;
+            }
+
             let extraRequirement = '';
             let jsonExample = '';
             if (targetCommentId) {
                 if (isReplyToSubComment) {
-                    extraRequirement = `\n【强制要求】：由于刚刚用户在一条评论的楼中楼里发表了新回复，**你本次必须且只能**生成针对该楼层的楼中楼回复(action: "reply_sub")，绝对**不允许**生成新的主评论(action: "new_main")。你要去互动和回应用户，被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)必须填 "我"。`;
+                    extraRequirement = `\n【强制要求】：由于刚刚用户在一条评论的楼中楼里发表了新回复，**你本次必须且只能**生成针对该楼层的楼中楼回复(action: "reply_sub")，绝对**不允许**生成新的主评论(action: "new_main")。你要去互动和回应用户，被回复主评论的ID为: ${targetCommentId}，被回复者(replyTo)必须填 "${myName}"。`;
                     jsonExample = `[
   {
     "action": "reply_sub",
     "targetCommentId": "${targetCommentId}",
-    "replyTo": "我",
+    "replyTo": "${myName}",
     "content": "楼中楼回复内容1"
   },
   {
     "action": "reply_sub",
     "targetCommentId": "${targetCommentId}",
-    "replyTo": "我",
+    "replyTo": "${myName}",
     "content": "楼中楼回复内容2"
   }
 ]`;
@@ -22619,7 +22638,7 @@ ${roleContext}
   {
     "action": "reply_sub",
     "targetCommentId": "${targetCommentId}",
-    "replyTo": "被回复者的名字（例如'我'，或null表示直接回复层主）",
+    "replyTo": "被回复者的名字（例如'${myName}'，或null表示直接回复层主）",
     "content": "楼中楼回复内容"
   }
 ]`;
@@ -22642,7 +22661,7 @@ ${roleContext}
 ]`;
             }
 
-            let prompt = `你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“我”的最新发言进行回复或围观）。
+            let prompt = `你现在需要扮演不同的网络论坛/微博用户，针对这篇帖子和当前的评论区发表新的评论（特别是对用户“${myName}”的最新发言进行回复或围观）。
 【原帖内容】：
 ${post.content}
 
@@ -22707,7 +22726,7 @@ ${jsonExample}`;
                                             let replyToRealName = null;
                                             if (sub.replyTo) {
                                                 if (sub.replyTo === '我') {
-                                                    replyToRealName = '我';
+                                                    replyToRealName = myName;
                                                 } else if (nameMap[sub.replyTo]) {
                                                     replyToRealName = nameMap[sub.replyTo];
                                                 } else {
@@ -22746,8 +22765,9 @@ ${jsonExample}`;
                                 if (!comment.subComments) comment.subComments = [];
                                 let replyToName = act.replyTo;
                                 if (replyToName === 'null') replyToName = null;
-                                if (replyToName && nameMap[replyToName]) replyToName = nameMap[replyToName];
-                                else if (replyToName && replyToName !== '我') replyToName = generateRealisticNetName();
+                                if (replyToName === '我') replyToName = myName;
+                                else if (replyToName && nameMap[replyToName]) replyToName = nameMap[replyToName];
+                                else if (replyToName && replyToName !== myName) replyToName = generateRealisticNetName();
 
                                 comment.subComments.push({
                                     name: generateRealisticNetName(),
