@@ -4173,8 +4173,7 @@
             flex-grow: 1;
             overflow-y: auto;
         }
-        #tieba-worldbook-list::-webkit-scrollbar,
-        #tieba-roles-list::-webkit-scrollbar {
+        #tieba-worldbook-list::-webkit-scrollbar {
             display: none;
         }
         .tieba-small-checkbox .custom-checkbox {
@@ -5759,7 +5758,7 @@
         <div class="tieba-sidebar-overlay" id="tieba-sidebar-overlay" onclick="closeTiebaSidebar(event)">
             <div class="tieba-sidebar" id="tieba-sidebar" onclick="event.stopPropagation()">
                 <div class="tieba-sidebar-header">
-                    贴吧设置
+                    论坛设置
                 </div>
                 <div class="tieba-sidebar-content">
                     <div class="settings-item">
@@ -5770,15 +5769,6 @@
                         <p style="font-size: 12px; color: #666; margin-top: 5px;">绑定的世界书将影响生成的帖子内容</p>
                     </div>
                     
-                    <div class="settings-item" style="margin-top: 20px;">
-                        <label style="font-weight: 600; font-size: 15px; color: #333; display: flex; justify-content: space-between; align-items: center;">
-                            参与贴吧的角色
-                            <span style="font-size: 13px; font-weight: normal; color: #576b95; cursor: pointer;" onclick="selectAllTiebaRoles()">全选/反选</span>
-                        </label>
-                        <div id="tieba-roles-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px; max-height: 350px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 12px; background: #fff;">
-                            <!-- Checkboxes injected by JS -->
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -21203,55 +21193,6 @@ ${historyText}`;
                 wbList.innerHTML = '<div style="text-align:center; color:#999; font-size:13px; padding: 10px 0;">暂无世界书</div>';
             }
             
-            // Populate Roles
-            const rolesList = document.getElementById('tieba-roles-list');
-            rolesList.innerHTML = '';
-            
-            let savedRoles = [];
-            try {
-                savedRoles = JSON.parse(localStorage.getItem('tieba_participating_roles') || '[]');
-            } catch(e){}
-            
-            dbGetAll('friends', friends => {
-                const nonGroupFriends = friends.filter(f => !f.isGroup);
-                if (nonGroupFriends.length === 0) {
-                    rolesList.innerHTML = '<div style="text-align:center; color:#999; font-size:13px; padding: 10px 0;">暂无角色</div>';
-                    return;
-                }
-                nonGroupFriends.forEach(friend => {
-                    const label = document.createElement('label');
-                    label.className = 'preset-checkbox-item tieba-small-checkbox';
-                    label.style.padding = '5px 0';
-                    
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.value = friend.id;
-                    if (savedRoles.includes(friend.id)) {
-                        checkbox.checked = true;
-                    }
-                    checkbox.onchange = saveTiebaSettings;
-                    
-                    const customCheck = document.createElement('div');
-                    customCheck.className = 'custom-checkbox';
-                    
-                    const avatar = document.createElement('img');
-                    avatar.src = friend.avatar;
-                    avatar.style.width = '24px';
-                    avatar.style.height = '24px';
-                    avatar.style.borderRadius = '4px';
-                    avatar.style.marginRight = '8px';
-                    avatar.style.objectFit = 'cover';
-
-                    const span = document.createElement('span');
-                    span.textContent = friend.name;
-                    
-                    label.appendChild(checkbox);
-                    label.appendChild(customCheck);
-                    label.appendChild(avatar);
-                    label.appendChild(span);
-                    rolesList.appendChild(label);
-                });
-            });
         }
 
         function closeTiebaSidebar(e) {
@@ -21274,24 +21215,6 @@ ${historyText}`;
             } else {
                 localStorage.removeItem('tieba_bound_worldbooks');
             }
-            
-            const checkboxes = document.querySelectorAll('#tieba-roles-list input[type="checkbox"]:checked');
-            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-            localStorage.setItem('tieba_participating_roles', JSON.stringify(selectedIds));
-        }
-
-        function selectAllTiebaRoles() {
-            const checkboxes = document.querySelectorAll('#tieba-roles-list input[type="checkbox"]');
-            if (checkboxes.length === 0) return;
-            let allChecked = true;
-            checkboxes.forEach(cb => {
-                if (!cb.checked) allChecked = false;
-            });
-            
-            checkboxes.forEach(cb => {
-                cb.checked = !allChecked;
-            });
-            saveTiebaSettings();
         }
 
         // --- Tieba Search & Feed Logic ---
