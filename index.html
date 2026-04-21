@@ -14565,6 +14565,22 @@
                             });
                         }
 
+                        const isSeparateOfflineUIActive = document.getElementById('offline-chat-page') && document.getElementById('offline-chat-page').classList.contains('active');
+                        const isOfflineModeActive = (friend.offlineSettings && friend.offlineSettings.enabled) || isSeparateOfflineUIActive;
+                        
+                        if (isOfflineModeActive) {
+                            const settings = friend.offlineSettings || {};
+                            const minWords = settings.replyWordCountMin || '无';
+                            const maxWords = settings.replyWordCountMax || '无';
+                            if (minWords !== '无' || maxWords !== '无') {
+                                history.push({
+                                    type: 'system',
+                                    text: `【字数与人设双重校验】：本次回复总字数（含语言、动作、心理描写等）需控制在 ${minWords} 到 ${maxWords} 字之间。请在此字数框架内，**完美保持你的角色性格与语气**，不可为了凑字数或删减字数而变得机械、敷衍或偏离人设。`,
+                                    timestamp: Date.now()
+                                });
+                            }
+                        }
+
                     try {
                         let aiResponseText = await callLLM(config, systemPrompt, history);
 
@@ -15549,7 +15565,9 @@
                 }
                 const minWords = settings.replyWordCountMin || '无';
                 const maxWords = settings.replyWordCountMax || '无';
-                prompt += `    - **字数限制**: 你的总回复字数（包括语言、动作、心理）应在 ${minWords} 到 ${maxWords} 字之间。请务必遵守。\n`;
+                if (minWords !== '无' || maxWords !== '无') {
+                    prompt += `    - **【字数与人设要求】**: 你的本次回复**总字数**（包含语言+动作+心理描写的所有文字总和）需控制在 **${minWords} 到 ${maxWords} 字** 之间。请在满足此字数要求的前提下，**绝对保持角色的人设、说话风格和剧情连贯性**，切勿为了满足字数而变得生硬、敷衍或偏离角色原本的设定。\n`;
+                }
                 
                 if (friend.isGroup) {
                      prompt += `3.  **视角**: \n`;
