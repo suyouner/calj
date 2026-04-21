@@ -6264,7 +6264,7 @@
     <!-- Split Message Modal -->
     <div class="modal-overlay" id="split-message-modal" style="z-index: 2500;">
         <div class="modal-content" style="width: 300px;">
-            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 10px;">拆分消息（分句消息使用）</h3>
+            <h3 style="text-align: center; font-size: 17px; font-weight: 600; margin-bottom: 10px;">拆分消息（换行使用）</h3>
             <textarea id="split-message-content" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; resize: none; height: 120px; font-size: 14px; box-sizing: border-box;"></textarea>
             <div class="modal-actions" style="margin-top: 15px;"> 
                 <button class="cancel-btn" onclick="document.getElementById('split-message-modal').style.display='none'">取消</button>
@@ -12487,12 +12487,20 @@
                             
                             const addNext = (index) => {
                                 if (index >= lines.length) {
-                                    document.getElementById('split-message-modal').style.display = 'none';
-                                    if (dbMsg.isOfflineSeparate || document.getElementById('offline-chat-page').classList.contains('active')) {
-                                        renderOfflineChat(currentChatFriendId, false, null);
-                                    } else {
-                                        renderMessages(currentChatFriendId);
-                                    }
+                                    const sysMsg = {
+                                        friendId: dbMsg.friendId,
+                                        text: '【系统提示】消息已进行手动拆分，请注意使用换行符，如果不是必要的大段回复，请注意拆分消息！',
+                                        type: 'system',
+                                        timestamp: baseTime + index
+                                    };
+                                    dbAdd('chat_history', sysMsg, () => {
+                                        document.getElementById('split-message-modal').style.display = 'none';
+                                        if (dbMsg.isOfflineSeparate || document.getElementById('offline-chat-page').classList.contains('active')) {
+                                            renderOfflineChat(currentChatFriendId, false, null);
+                                        } else {
+                                            renderMessages(currentChatFriendId);
+                                        }
+                                    });
                                     return;
                                 }
                                 
