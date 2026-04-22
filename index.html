@@ -12623,7 +12623,11 @@
                 let deletedCount = 0;
                 
                 idsToDelete.forEach(id => {
-                    dbDelete('chat_history', id, () => {
+                    let key = id;
+                    if (!isNaN(Number(id))) {
+                        key = Number(id);
+                    }
+                    dbDelete('chat_history', key, () => {
                         deletedCount++;
                         if (deletedCount === idsToDelete.length) {
                             showToast('删除成功');
