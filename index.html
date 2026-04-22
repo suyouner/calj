@@ -14667,7 +14667,7 @@
                             const isOfflineMode = (friend.offlineSettings && friend.offlineSettings.enabled) || (friend.separateOfflineUI && document.getElementById('offline-chat-page').classList.contains('active'));
 
                             // Remove newlines inside <photo> tags to prevent fragmentation
-                            aiResponseText = aiResponseText.replace(/<photo>([\s\S]*?)<\/photo>/g, (match, p1) => {
+                            aiResponseText = aiResponseText.replace(/<photo>([\s\S]*?)<\/photo>/gi, (match, p1) => {
                                 return `<photo>${p1.replace(/\n/g, ' ')}</photo>`;
                             });
                             
@@ -14748,7 +14748,7 @@
                                     }
                                     
                                     if (senderMember && text) {
-                                            const stickerRegex = /<sticker>(.*?)<\/sticker>/;
+                                            const stickerRegex = /<sticker>(.*?)<\/sticker>/i;
                                             const stickerMatch = text.match(stickerRegex);
                                             let stickerUrl = null;
                                             if (stickerMatch) {
@@ -14775,12 +14775,12 @@
 
                                             let hasDice = false;
 
-                                            const lazyImageRegex = /[\[【［\(（\*]+(?:发送了|发了|发送|发)?(?:一张|一张张)?(?:图片|照片|自拍|图)(?:：|:)?\s*(.*?)[\]】］\)）\*]+/g;
-                                            if (!text.includes('<photo>')) {
+                                            const lazyImageRegex = /[\[【［\(（\*]+(?:发送了|发了|发送|发)?(?:一张|一张张)?(?:图片|照片|自拍|图|photo)(?:：|:)?\s*(.*?)[\]】］\)）\*]+/gi;
+                                            if (!text.match(/<photo>/i)) {
                                                 text = text.replace(lazyImageRegex, (match, desc) => `<photo>${desc || '一张照片'}</photo>`);
                                             }
 
-                                            const photoRegex = /<photo>([\s\S]*?)<\/photo>/;
+                                            const photoRegex = /<photo>([\s\S]*?)<\/photo>/i;
                                             const photoMatch = text.match(photoRegex);
                                             let aiPhotoDesc = null;
                                             if (photoMatch) {
@@ -14977,9 +14977,9 @@
                                     let quoteData = null;
                                     let transferData = null;
 
-                                    // Parse Delete Moment Command
-                                    const deleteMomentRegex = /<delete_moment>(.*?)<\/delete_moment>/;
-                                    const deleteMomentMatch = partText.match(deleteMomentRegex);
+                                // Parse Delete Moment Command
+                                const deleteMomentRegex = /<delete_moment>(.*?)<\/delete_moment>/i;
+                                const deleteMomentMatch = partText.match(deleteMomentRegex);
                                     if (deleteMomentMatch) {
                                         const keyword = deleteMomentMatch[1].trim();
                                         partText = partText.replace(deleteMomentRegex, '').trim();
@@ -15003,7 +15003,7 @@
                                     }
 
                                     // New: Parse Avatar Change Command
-                                    const avatarChangeRegex = /<change_avatar>(.*?)<\/change_avatar>/;
+                                    const avatarChangeRegex = /<change_avatar>(.*?)<\/change_avatar>/i;
                                     const avatarChangeMatch = partText.match(avatarChangeRegex);
                                     if (avatarChangeMatch) {
                                         const imageIdOrUrl = avatarChangeMatch[1].trim();
@@ -15030,8 +15030,8 @@
                                     }
 
                                     // Parse Transfer
-                                    const transferRegex = /<transfer amount="([^"]+)">([^<]*)<\/transfer>/;
-                                    const transferMatch = partText.match(transferRegex);
+                                const transferRegex = /<transfer amount="([^"]+)">([^<]*)<\/transfer>/i;
+                                const transferMatch = partText.match(transferRegex);
                                     if (transferMatch) {
                                         transferData = {
                                             amount: transferMatch[1],
@@ -15041,7 +15041,7 @@
                                     }
 
                                 // Parse AI Sticker
-                                const aiStickerRegex = /<sticker>(.*?)<\/sticker>/;
+                                const aiStickerRegex = /<sticker>(.*?)<\/sticker>/i;
                                 const aiStickerMatch = partText.match(aiStickerRegex);
                                 let aiStickerUrl = null;
                                 if (aiStickerMatch) {
@@ -15110,7 +15110,7 @@
 
 
                                 // Parse Music Control
-                                const musicControlRegex = /<music_control>(.*?)<\/music_control>/;
+                                const musicControlRegex = /<music_control>(.*?)<\/music_control>/i;
                                 const musicMatch = partText.match(musicControlRegex);
                                 let hasMusicAction = false;
                                 if (musicMatch) {
@@ -15202,7 +15202,7 @@
                                     }
 
                                     // Parse Quote
-                                    const quoteRegex = /<quote>(.*?)<\/quote>/;
+                                    const quoteRegex = /<quote>(.*?)<\/quote>/i;
                                     const match = partText.match(quoteRegex);
                                     if (match) {
                                         quoteData = {
@@ -15670,7 +15670,7 @@
                 prompt += `为了模拟真实的微信聊天体验，**任何人设**（无论是高冷、年长还是活泼）都必须遵循以下**强制断句规则**：\n`;
                 prompt += `1. **强制换行拆分**：除非用户明确要求“写长篇大论”或“一整段回复”，否则只要你的回复超过两句话，就**必须使用换行符（回车）**将其拆分为多条短消息。严禁回复没有换行的一长段文字！少于两句话时可以不换行。\n`;
                 prompt += `2. **标点与停顿**：\n   - 随性/年轻/高冷人设：多用空格代替标点，省略句末标点，大量使用换行。\n   - 严谨/年长人设：可以保留规范标点，但长回复也必须用换行符拆分成几条发送。\n`;
-                prompt += `3. **共同底线（无论何种人设都必须遵守）**：\n   - **严禁**使用书面语引号「」包裹对话。\n   - **严禁**在正文中出现任何动作、神态描写（如*叹气*、*笑*、（摸头）等）。\n   - **严禁**输出 <br> 等 HTML 代码。\n   - **绝对禁止使用纯文字占位符来敷衍发图行为**（例如绝对不能输出“[图片]”、“[发了一张自拍]”）。发已有的表情包必须用 <sticker> 标签；如果是发新的照片或自拍，必须且只能使用 <photo>照片的详细画面描述</photo> 标签！\n   - 直接输出你想说的话，就像你在用微信打字一样。\n`;
+                prompt += `3. **共同底线（无论何种人设都必须遵守）**：\n   - **严禁**使用书面语引号「」包裹对话。\n   - **严禁**在正文中出现任何动作、神态描写（如*叹气*、*笑*、（摸头）等）。\n   - **严禁**输出 <br> 等 HTML 代码。\n   - **绝对禁止**使用纯文字占位符来敷衍发图行为**（例如绝对不能输出“[图片]”、“[发了一张自拍]”）。发已有的表情包必须用 <sticker> 标签；如果是发新的照片或自拍，必须且只能使用 <photo>照片的详细画面描述</photo> 标签！\n   - 直接输出你想说的话，就像你在用微信打字一样。\n`;
 
                 if (friend.enableThoughts) {
                     prompt += `\n【心声功能特别强调】\n即便开启了心声功能，你在“线上模式”下的正文也【必须】保持纯粹的聊天格式，【严禁】任何形式的动作或心理描写。心声只能作为附加信息，使用 <mood> 和 <inner_thought> 标签包裹，并【必须】放在所有聊天消息的【最后面】。\n<mood> 标签中仅允许填写一个日式颜文字（Kaomoji），例如 (^_^), (>_<), (T_T) 等。严禁使用任何 Emoji 表情（如 😊, 😂）。【重要】每次回复都【必须】生成 <mood> 标签，否则视为违规。\n`;
@@ -16098,7 +16098,7 @@
 
                         if (aiResponseText) {
                             // Remove newlines inside <photo> tags to prevent fragmentation
-                            aiResponseText = aiResponseText.replace(/<photo>([\s\S]*?)<\/photo>/g, (match, p1) => {
+                            aiResponseText = aiResponseText.replace(/<photo>([\s\S]*?)<\/photo>/gi, (match, p1) => {
                                 return `<photo>${p1.replace(/\n/g, ' ')}</photo>`;
                             });
                             
@@ -16938,48 +16938,42 @@ ${historyText}`;
                         return;
                     }
 
-                    let processedText = text;
+                    // 保护系统级功能标签不被用户正则误删，采用物理切分法
+                    const protectPattern = /(<(?:photo|sticker|dice|transfer|location|quote|music_control|delete_moment|change_avatar|send_image)[^>]*>[\s\S]*?<\/(?:photo|sticker|dice|transfer|location|quote|music_control|delete_moment|change_avatar|send_image)>)/gi;
                     
-                    // 保护系统级功能标签不被用户正则误删
-                    const protectedTags = [];
-                    const protectPattern = /<(photo|sticker|dice|transfer|location|quote|music_control|delete_moment|change_avatar|send_image)[^>]*>[\s\S]*?<\/\1>/gi;
-                    
-                    processedText = processedText.replace(protectPattern, (match) => {
-                        const placeholder = `___SYS_TAG_PROTECT_${protectedTags.length}___`;
-                        protectedTags.push(match);
-                        return placeholder;
-                    });
+                    const parts = text.split(protectPattern);
 
-                    rules.forEach(rule => {
-                        let isMatch = false;
-                        if (rule.scopeType === 'all') isMatch = true;
-                        else if (rule.scopeType === 'group' && rule.scopeTarget === friendGroup) isMatch = true;
-                        else if (rule.scopeType === 'character') {
-                            if (Array.isArray(rule.scopeTarget)) {
-                                if (rule.scopeTarget.includes(friendId)) isMatch = true;
-                            } else if (rule.scopeTarget === friendId) {
-                                isMatch = true;
-                            }
+                    for (let i = 0; i < parts.length; i++) {
+                        // 偶数索引是普通文本，奇数索引是保护的标签
+                        if (i % 2 === 0) {
+                            let processedPart = parts[i];
+                            rules.forEach(rule => {
+                                let isMatch = false;
+                                if (rule.scopeType === 'all') isMatch = true;
+                                else if (rule.scopeType === 'group' && rule.scopeTarget === friendGroup) isMatch = true;
+                                else if (rule.scopeType === 'character') {
+                                    if (Array.isArray(rule.scopeTarget)) {
+                                        if (rule.scopeTarget.includes(friendId)) isMatch = true;
+                                    } else if (rule.scopeTarget === friendId) {
+                                        isMatch = true;
+                                    }
+                                }
+
+                                if (isMatch) {
+                                    try {
+                                        const regex = new RegExp(rule.pattern, rule.flags);
+                                        const replacement = rule.replacement.replace(/\\n/g, '\n');
+                                        processedPart = processedPart.replace(regex, replacement);
+                                    } catch (e) {
+                                        console.error('Regex rule error:', e);
+                                    }
+                                }
+                            });
+                            parts[i] = processedPart;
                         }
+                    }
 
-                        if (isMatch) {
-                            try {
-                                const regex = new RegExp(rule.pattern, rule.flags);
-                                const replacement = rule.replacement.replace(/\\n/g, '\n');
-                                processedText = processedText.replace(regex, replacement);
-                            } catch (e) {
-                                console.error('Regex rule error:', e);
-                            }
-                        }
-                    });
-
-                    // 还原系统级功能标签
-                    protectedTags.forEach((tag, index) => {
-                        const placeholder = `___SYS_TAG_PROTECT_${index}___`;
-                        processedText = processedText.replace(placeholder, tag);
-                    });
-
-                    resolve(processedText);
+                    resolve(parts.join(''));
                 });
             });
         }
