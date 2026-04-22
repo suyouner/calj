@@ -16920,6 +16920,17 @@ ${historyText}`;
                     }
 
                     let processedText = text;
+                    
+                    // 保护系统级功能标签不被用户正则误删
+                    const protectedTags = [];
+                    const protectPattern = /<(photo|sticker|dice|transfer|location|quote|music_control|delete_moment|change_avatar|send_image)[^>]*>[\s\S]*?<\/\1>/gi;
+                    
+                    processedText = processedText.replace(protectPattern, (match) => {
+                        const placeholder = `___SYS_TAG_PROTECT_${protectedTags.length}___`;
+                        protectedTags.push(match);
+                        return placeholder;
+                    });
+
                     rules.forEach(rule => {
                         let isMatch = false;
                         if (rule.scopeType === 'all') isMatch = true;
@@ -16942,6 +16953,13 @@ ${historyText}`;
                             }
                         }
                     });
+
+                    // 还原系统级功能标签
+                    protectedTags.forEach((tag, index) => {
+                        const placeholder = `___SYS_TAG_PROTECT_${index}___`;
+                        processedText = processedText.replace(placeholder, tag);
+                    });
+
                     resolve(processedText);
                 });
             });
