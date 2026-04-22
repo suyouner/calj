@@ -8669,7 +8669,7 @@
                     req.onsuccess = () => {
                         const result = req.result || [];
                         // 提取轻量级必要数据：ID, SRC 和描述，避免携带可能的巨大冗余信息
-                        resolve(result.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                        resolve(result.map(s => ({ id: s.id, src: s.src, description: s.description, friendId: s.friendId })));
                     };
                     req.onerror = () => resolve([]);
                 } catch(e) {
@@ -14469,7 +14469,7 @@
                             const req = index.getAll(fId);
                             req.onsuccess = () => {
                                 const res = req.result || [];
-                                resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                                resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description, friendId: s.friendId })));
                             };
                             req.onerror = () => resolve([]);
                         } catch(e) {
@@ -14761,8 +14761,10 @@
                                                 const s = allStickers.find(st => String(st.id) === stickerId && st.friendId === senderMember.id);
                                                 if (s) {
                                                     stickerUrl = s.src;
-                                                } else {
+                                                } else if (stickerId.startsWith('http') || stickerId.startsWith('data:image') || stickerId.startsWith('./') || stickerId.startsWith('/')) {
                                                     stickerUrl = stickerId;
+                                                } else {
+                                                    stickerUrl = null;
                                                 }
                                                 text = text.replace(stickerRegex, '').trim();
                                             }
@@ -15043,8 +15045,10 @@
                                     const matchedSticker = aiStickers.find(s => String(s.id) === stickerValue);
                                     if (matchedSticker) {
                                         aiStickerUrl = matchedSticker.src;
-                                    } else {
+                                    } else if (stickerValue.startsWith('http') || stickerValue.startsWith('data:image') || stickerValue.startsWith('./') || stickerValue.startsWith('/')) {
                                         aiStickerUrl = stickerValue;
+                                    } else {
+                                        aiStickerUrl = null;
                                     }
                                     partText = partText.replace(aiStickerRegex, '').trim();
                                 }
@@ -15517,7 +15521,7 @@
                 const globalStickers = aiStickers.filter(s => s.friendId === 'global');
 
                 if (globalStickers.length > 0) {
-                    prompt += `【可用表情库】\n当你想要发送表情包时，**绝对禁止**使用文字自行编造，**必须且只能**从以下表情库中选择，并直接输出其对应的XML标签。\n`;
+                    prompt += `【可用表情库】\n当你想要发表情包时，**绝对禁止**使用文字自行编造（例如严禁输出“[发送了一张表情包]”、“[图片]”等文字），**必须且只能**从以下表情库中选择，并直接输出对应的 <sticker> 标签。如果没有合适的表情，请直接回复纯文字，绝不能自己用文字编造表情！\n`;
                     globalStickers.forEach((sticker, index) => {
                         const desc = sticker.description ? ` (含义：${sticker.description})` : '';
                         prompt += `${index + 1}. <sticker>${sticker.id}</sticker>${desc}\n`;
@@ -15526,7 +15530,7 @@
                 }
 
                 if (friendStickers.length > 0) {
-                    prompt += `【你的专属表情库】\n你还可以使用以下更符合你人设的专属表情包（同样，**必须只能**选用这里的表情，不可自行编造）：\n`;
+                    prompt += `【你的专属表情库】\n你还可以使用以下更符合你人设的专属表情包（同样，**必须只能**选用这里的表情，不可自行编造或用文字描述发表情的动作）：\n`;
                     friendStickers.forEach((sticker, index) => {
                         const desc = sticker.description ? ` (含义：${sticker.description})` : '';
                         prompt += `${index + 1}. <sticker>${sticker.id}</sticker>${desc}\n`;
@@ -16044,7 +16048,7 @@
                         const req = index.getAll(friend.id);
                         req.onsuccess = () => {
                             const res = req.result || [];
-                            resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                            resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description, friendId: s.friendId })));
                         };
                         req.onerror = () => resolve([]);
                     } catch(e) {
@@ -21446,7 +21450,7 @@ ${historyText}`;
                             const req = index.getAll(friend.id);
                             req.onsuccess = () => {
                                 const res = req.result || [];
-                                resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                                resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description, friendId: s.friendId })));
                             };
                             req.onerror = () => resolve([]);
                         } catch(e) {
@@ -22378,7 +22382,7 @@ ${roleContext}
                     const req = index.getAll(friend.id);
                     req.onsuccess = () => {
                         const res = req.result || [];
-                        resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description })));
+                        resolve(res.map(s => ({ id: s.id, src: s.src, description: s.description, friendId: s.friendId })));
                     };
                     req.onerror = () => resolve([]);
                 } catch(e) {
