@@ -15212,7 +15212,7 @@
                                         partText = partText.replace(quoteRegex, '').trim();
                                     }
                                     
-                                    if (partText === '' && !transferData && !aiStickerUrl && !hasDice && !locationData) {
+                                    if (partText === '' && !transferData && !aiStickerUrl && !hasDice && !locationData && !aiPhotoDesc) {
                                         if (hasAction) {
                                             partText = actionText;
                                         } else if (avatarChangeMatch || hasMusicAction) {
@@ -15251,6 +15251,33 @@
                                         }
                                         await new Promise(resolve => dbAdd('chat_history', locationMsg, resolve));
                                         friend.lastMsg = `[位置] ${locationData.name}`;
+                                    } else if (aiPhotoDesc) {
+                                        if (partText) {
+                                            const textMsg = { friendId: friend.id, text: partText, type: 'received', timestamp: Date.now() };
+                                            if (quoteData) textMsg.quote = quoteData;
+                                            if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) {
+                                                addMessageToUI(textMsg);
+                                            } else {
+                                                showBannerNotification(friend, partText);
+                                            }
+                                            await new Promise(resolve => dbAdd('chat_history', textMsg, resolve));
+                                        }
+
+                                        const fakePhotoMsg = {
+                                            friendId: friend.id,
+                                            text: `[照片] ${aiPhotoDesc}`,
+                                            type: 'received',
+                                            timestamp: Date.now() + 100,
+                                            isPhotoCard: true,
+                                            photoDesc: aiPhotoDesc
+                                        };
+                                        if (currentChatFriendId === friend.id && document.getElementById('chat-interface-page').classList.contains('active')) {
+                                            addMessageToUI(fakePhotoMsg);
+                                        } else {
+                                            showBannerNotification(friend, '[照片]');
+                                        }
+                                        await new Promise(resolve => dbAdd('chat_history', fakePhotoMsg, resolve));
+                                        friend.lastMsg = '[照片]';
                                     } else if (transferData) {
                                         if (partText) {
                                             const textMsg = { friendId: friend.id, text: partText, type: 'received', timestamp: Date.now() };
@@ -15688,6 +15715,7 @@
 8. 发送图片：如果用户发给你图片并希望你把它发出来（例如玩梗等），你可以根据人设直接答应或者进行多回合互动。当你决定要发这张照片时，请输出 <send_image>图片ID或图片链接</send_image> 指令，系统会自动帮你把那张图发出去。
 9. 删除朋友圈：如果用户在聊天中提到让你删掉某条朋友圈动态，你可以根据人设决定是否同意。如果同意，请在回复中包含指令<delete_moment>动态关键字或ID</delete_moment>，系统会自动帮你删除包含该关键字的最新一条朋友圈。如果你不想删，可以找理由拒绝。
 10. 发送位置：如果你想发送一个地理位置，请使用格式：<location name="位置名称">详细地址（可选）</location>。系统会自动将其渲染为位置卡片。你可以在发送位置的同时附带额外的文字。
+11. 发送照片：如果你想向用户发送现拍的照片/自拍，请在回复中包含：<photo>照片画面的详细描述</photo>。系统会自动将其渲染为照片卡片。绝对禁止直接输出“[发送了一张图片]”！
 
 【核心机制：发送照片】
 当你想向用户发送任何类型的照片（包括但不限于自拍、风景、美食、周围环境、物品等）时，你必须使用 <photo>照片的详细画面描述</photo> 标签！
