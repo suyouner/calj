@@ -8867,7 +8867,7 @@
             listContainer.innerHTML = '';
 
             dbGetAll('friends', friends => {
-                friends.forEach(friend => {
+                friends.filter(f => !f.isGroup).forEach(friend => {
                     const label = document.createElement('label');
                     label.className = 'gm-contact-item';
                     label.style.padding = '10px 0';
