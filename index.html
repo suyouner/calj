@@ -21102,10 +21102,23 @@ ${historyText}`;
             };
             setVh();
             let lastWidth = window.innerWidth;
+            let lastHeight = window.innerHeight;
             window.addEventListener('resize', () => {
-                if (window.innerWidth !== lastWidth) {
-                    lastWidth = window.innerWidth;
+                const currentWidth = window.innerWidth;
+                const currentHeight = window.innerHeight;
+                
+                if (currentWidth !== lastWidth) {
+                    lastWidth = currentWidth;
+                    lastHeight = currentHeight;
                     setVh();
+                } else if (currentHeight !== lastHeight) {
+                    const activeEl = document.activeElement;
+                    const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.hasAttribute('contenteditable'));
+                    
+                    if (!isInputFocused) {
+                        lastHeight = currentHeight;
+                        setVh();
+                    }
                 }
             });
         };
