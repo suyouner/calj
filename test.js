@@ -6724,7 +6724,6 @@ ${historyText}`;
             });
 
             document.getElementById('transfer-modal').style.display = 'none';
-            // Do not trigger AI response automatically
         }
 
         function openTransferActionModal(msg) {
